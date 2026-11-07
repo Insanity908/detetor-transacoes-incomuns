@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.14, pandas, numpy, scikit-learn, matplotlib, joblib, Flask, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-11-07-detector-transacoes-incomuns-design.md`
+**Spec:** `docs/desenvolvimento/specs/2026-11-07-detector-transacoes-incomuns-design.md`
 
 ## Global Constraints
 
