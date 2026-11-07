@@ -92,3 +92,17 @@ def test_niveis_seguem_a_tabela(treinado):
     falso = Falso(det.classificadores, det.limiares, det.escolhido, det.isolation, det.limiar_anomalia)
     X = pd.DataFrame(np.zeros((3, len(FEATURES))), columns=FEATURES)
     assert falso.avaliar(X).nivel.tolist() == ["Alto risco", "Atenção", "Normal"]
+
+
+def test_anomalia_nao_alerta_cliente_sem_historico(treinado):
+    det, _ = treinado
+
+    class Falso(Detector):
+        def pontuacoes(self, X):
+            return pd.DataFrame({"prob": [.0, .0], "anomalia_bruta": [1.0, 1.0]}, index=X.index)
+
+    falso = Falso(det.classificadores, det.limiares, det.escolhido, det.isolation, det.limiar_anomalia)
+    X = pd.DataFrame(np.zeros((2, len(FEATURES))), columns=FEATURES)
+    X["historico_curto"] = [1, 0]  # sem histórico, não há "habitual" com que comparar
+    r = falso.avaliar(X)
+    assert r.nivel.tolist() == ["Normal", "Atenção"] and r.alerta_anomalia.tolist() == [False, True]

@@ -47,6 +47,24 @@
 <h2>Importância das features</h2>
 <figure><img src="/graficos/importancia.png" alt="Importância das features por permutação"><figcaption>Calculada por permutação na validação</figcaption></figure>
 
+{% if res.clientes_novos %}
+{% set n = res.clientes_novos %}
+<h2>Clientes novos</h2>
+<p class="ajuda">Compras de clientes com menos de 5 compras anteriores. Cerca de 25% dos clientes aderem depois dos primeiros
+  30 dias, por isso o treino tem {{ n.transacoes_treino }} compras deste tipo e o modelo aprende a avaliá-las.</p>
+<div class="rolagem"><table class="estreita">
+  <thead><tr><th>Medida (teste)</th><th class="num">Clientes novos</th><th class="num">Clientes conhecidos</th></tr></thead>
+  <tbody>
+    <tr><td>Compras</td><td class="num">{{ n.transacoes }}</td><td class="num">—</td></tr>
+    <tr><td>Legítimas com alerta (alertas falsos)</td><td class="num">{{ n.falsos_alertas_pct | pct }}</td>
+      <td class="num">{{ n.falsos_alertas_pct_conhecidos | pct }}</td></tr>
+    <tr><td>Fraudes</td><td class="num">{{ n.fraudes }}</td><td class="num">—</td></tr>
+    <tr><td>Fraudes apanhadas</td><td class="num">{{ n.recall | pct }}</td><td class="num">—</td></tr>
+  </tbody>
+</table></div>
+{% if n.fraudes < 10 %}<p class="ajuda">Há poucas fraudes de clientes novos no teste: a percentagem de fraudes apanhadas neste grupo é pouco fiável.</p>{% endif %}
+{% endif %}
+
 <h2>Divisão aleatória contra divisão por tempo</h2>
 <div class="rolagem"><table class="estreita">
   <thead><tr><th>Divisão</th><th class="num">F1 no teste</th></tr></thead>

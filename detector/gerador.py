@@ -22,6 +22,8 @@ TIPOS_FRAUDE = ("valor_alto", "pais_estranho", "horario_estranho", "rajada", "co
 NOMES_TIPO_FRAUDE = {"valor_alto": "Valor alto", "pais_estranho": "País estranho", "horario_estranho": "Horário estranho",
                      "rajada": "Rajada", "conta_tomada": "Conta tomada"}
 PAISES_ESTRANHOS = ("NG", "AE", "CN", "BR", "IN", "ZW", "MW", "TZ")
+FRACAO_CLIENTES_NOVOS = 0.25  # aderem depois do aquecimento, para o modelo ver clientes sem histórico
+DIA_ADESAO_MIN = 30  # índice 0: dia 31
 EVENTOS_POR_TRANSACAO = 0.0053  # com a rajada valendo várias compras, dá cerca de 1% de fraudes
 
 
@@ -35,12 +37,15 @@ def _clientes(rng: np.random.Generator, n_clientes: int, dias: int) -> list[dict
         k = int(rng.integers(3, 5))
         categorias = rng.choice(CATEGORIAS, size=k, replace=False, p=PESO_CATEGORIAS)
         cidade = str(rng.choice(CIDADES, p=PESO_CIDADES))
+        tardio = rng.random() < FRACAO_CLIENTES_NOVOS and dias - 10 > DIA_ADESAO_MIN
+        adesao = int(rng.integers(DIA_ADESAO_MIN, dias - 10)) if tardio else 0
         muda = rng.random() < 0.05
         clientes.append({
             "cliente": f"C{i + 1:04d}",
+            "adesao": adesao,
             "cidade": cidade,
             "nova_cidade": str(rng.choice([c for c in CIDADES if c != cidade])) if muda else None,
-            "dia_mudanca": int(rng.integers(dias // 3, dias)) if muda else None,
+            "dia_mudanca": int(rng.integers(max(adesao, dias // 3), dias)) if muda else None,
             "tipico": float(np.clip(rng.lognormal(np.log(1200), 0.8), 300, 5000)),
             "pico": float(rng.uniform(8, 20)),
             "categorias": list(categorias),
@@ -58,8 +63,8 @@ def _cidade_no_dia(c: dict, dia: np.ndarray) -> np.ndarray:
 
 
 def _legitimas(rng: np.random.Generator, c: dict, dias: int, t0: pd.Timestamp) -> pd.DataFrame:
-    n = max(int(rng.poisson(c["taxa"] * dias)), 5)
-    dia = rng.integers(0, dias, n)
+    n = max(int(rng.poisson(c["taxa"] * (dias - c["adesao"]))), 5)
+    dia = rng.integers(c["adesao"], dias, n)
     hora = _hora(rng, c["pico"], n)
     noturna = rng.random(n) < 0.02
     hora[noturna] = rng.uniform(0, 5, noturna.sum())
@@ -81,7 +86,7 @@ def _legitimas(rng: np.random.Generator, c: dict, dias: int, t0: pd.Timestamp) -
 
 def _fraude(rng: np.random.Generator, c: dict, tipo: str, dias: int, t0: pd.Timestamp,
             categorias: np.ndarray, pesos: np.ndarray) -> pd.DataFrame:
-    dia = int(rng.integers(0, dias))
+    dia = int(rng.integers(c["adesao"], dias))
     inicio = t0 + pd.Timedelta(days=dia) + pd.Timedelta(minutes=float(_hora(rng, c["pico"], 1)[0]) * 60)
     cidade = _cidade_no_dia(c, np.array([dia]))[0]
     categoria = lambda n: rng.choice(categorias, size=n, p=pesos)  # mesmas proporções das legítimas

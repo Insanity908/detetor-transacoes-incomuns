@@ -48,3 +48,16 @@ def test_categorias_das_fraudes_seguem_as_legitimas(completo):
 def test_rajada_sao_compras_proximas_do_mesmo_cliente(completo):
     rajadas = completo[completo.tipo_fraude == "rajada"]
     assert rajadas.groupby("cliente").size().min() >= 4
+
+
+def test_parte_dos_clientes_adere_depois_do_aquecimento(completo):
+    primeira = completo.groupby("cliente").data_hora.min()
+    tardios = (primeira >= pd.Timestamp("2026-01-31")).mean()
+    assert 0.15 <= tardios <= 0.35
+    assert (primeira < pd.Timestamp("2026-01-05")).mean() >= 0.6  # os restantes começam logo
+
+
+def test_clientes_tardios_tem_compras_e_nada_antes_da_adesao(completo):
+    primeira = completo.groupby("cliente").data_hora.min()
+    tardios = primeira[primeira >= pd.Timestamp("2026-01-31")].index
+    assert completo[completo.cliente.isin(tardios)].groupby("cliente").size().min() >= 5

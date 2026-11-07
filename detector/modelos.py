@@ -67,7 +67,9 @@ class Detector:
         p = self.pontuacoes(X)
         limiar = self.limiares[self.escolhido]
         alerta_c = p["prob"].to_numpy() >= limiar
-        alerta_a = p["anomalia_bruta"].to_numpy() >= self.limiar_anomalia
+        # Sem histórico não há comportamento habitual com que comparar: a anomalia não gera alerta.
+        com_historico = X["historico_curto"].to_numpy() == 0
+        alerta_a = (p["anomalia_bruta"].to_numpy() >= self.limiar_anomalia) & com_historico
         return pd.DataFrame({
             "prob": p["prob"],
             "risco": para_escala(p["prob"], limiar).round(1),

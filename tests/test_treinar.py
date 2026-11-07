@@ -60,7 +60,7 @@ def test_relatorio_tem_as_secoes(resultado):
                    "Recall por tipo de fraude", "Isolation Forest", "Importância das features",
                    "Divisão aleatória contra divisão por tempo", "Limitações"):
         assert f"## {titulo}" in texto, titulo
-    assert "acurácia" in texto.lower() and "modelos/graficos/matriz_confusao.png" in texto
+    assert "acurácia" in texto.lower() and "docs/graficos/matriz_confusao.png" in texto
 
 
 def test_relatorio_formata_numeros_e_nomes(resultado):
@@ -90,3 +90,21 @@ def test_atalhos_por_tipo_de_fraude(resultado):
 def test_relatorio_usa_aprendizagem(resultado):
     texto = (resultado[1] / "RELATORIO.md").read_text(encoding="utf-8")
     assert "aprendizagem não supervisionada" in texto and "aprendizado" not in texto
+
+
+def test_graficos_do_relatorio_ficam_numa_pasta_versionada(resultado):
+    _, raiz = resultado
+    assert {p.name for p in (raiz / "docs" / "graficos").iterdir()} == {
+        "matriz_confusao.png", "importancia.png", "comparacao.png"}
+
+
+def test_clientes_novos_sao_medidos_a_parte(resultado):
+    res, raiz = resultado
+    novos = res["clientes_novos"]
+    assert novos["transacoes"] > 0 and {"fraudes", "alertas_pct", "falsos_alertas_pct", "recall"} <= set(novos)
+    assert "## Clientes novos" in (raiz / "RELATORIO.md").read_text(encoding="utf-8")
+
+
+def test_treino_ve_clientes_com_historico_curto(resultado):
+    res, _ = resultado
+    assert res["clientes_novos"]["transacoes_treino"] > 0

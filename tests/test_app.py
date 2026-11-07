@@ -200,3 +200,7 @@ def test_textos_em_portugues_de_mocambique(cliente):
     assert "Porque parece estranha" in html
     pagina = _enviar(cliente, CSV_VALIDO.encode()).get_data(as_text=True)
     assert "Descarregar resultado" in pagina and "Baixar" not in pagina
+
+
+def test_modelos_mostra_clientes_novos(cliente_treinado):
+    assert "Clientes novos" in cliente_treinado.get("/modelos").get_data(as_text=True)

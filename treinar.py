@@ -5,7 +5,7 @@ Execução, na raiz do projeto:
 """
 from __future__ import annotations
 
-import os
+import shutil
 import sys
 import time
 from datetime import datetime
@@ -142,6 +142,25 @@ def _leitura_divisoes(d: dict) -> str:
             "uso real: treinar com o passado e avaliar o futuro.")
 
 
+def _secao_clientes_novos(n: dict) -> list[str]:
+    linhas = [
+        "## Clientes novos", "",
+        "Cerca de 25% dos clientes aderem depois dos primeiros 30 dias, por isso o treino tem "
+        f"{_int(n['transacoes_treino'])} compras de clientes com menos de 5 compras anteriores, e o modelo aprende a "
+        "avaliá-las. No teste, estas compras são medidas à parte:", "",
+        "| Medida | Clientes novos | Clientes conhecidos |", "|---|---|---|",
+        f"| Compras no teste | {_int(n['transacoes'])} | — |",
+        f"| Legítimas com alerta (alertas falsos) | {_pct(n['falsos_alertas_pct'])} "
+        f"| {_pct(n['falsos_alertas_pct_conhecidos'])} |",
+        f"| Fraudes | {_int(n['fraudes'])} | — |",
+        f"| Fraudes apanhadas | {_pct(n['recall'])} | — |", "",
+    ]
+    if n["fraudes"] < 10:
+        linhas += ["Há poucas fraudes de clientes novos no teste, por isso a percentagem de fraudes apanhadas neste "
+                   "grupo é pouco fiável; a medida mais útil aqui é a dos alertas falsos.", ""]
+    return linhas
+
+
 def _relatorio(res: dict, graficos: str) -> str:
     d = res["dados"]
     linhas = [
@@ -218,6 +237,7 @@ def _relatorio(res: dict, graficos: str) -> str:
         "| Tipo | " + " | ".join(res["atalhos"]) + " |", "|---|" + "---|" * len(res["atalhos"]),
         *[f"| {NOMES_TIPO_FRAUDE[t]} | " + " | ".join(_num(v) for v in res["atalhos_por_tipo"][t].values()) + " |"
           for t in TIPOS_FRAUDE], "",
+        *_secao_clientes_novos(res["clientes_novos"]),
         "## Limitações", "",
         "- Os dados são sintéticos e de um único gerador; os resultados não valem automaticamente para "
         "fraudes reais.",
@@ -282,15 +302,38 @@ def executar(pasta_modelos: Path = Path("modelos"), pasta_dados: Path = Path("da
         "atalhos": _atalhos(df, tr, te),
         "atalhos_por_tipo": {t: _atalhos(df, tr, te, (df["tipo_fraude"] == t).to_numpy().astype(int))
                              for t in TIPOS_FRAUDE},
+        "clientes_novos": _clientes_novos(X, y, tr, te, alerta_c),
     }
     _graficos(pasta_modelos / "graficos", res)
     teste_avaliado = montar_resultado(df[te], X[te], avaliado, df[~te])  # reaproveita as features já calculadas
     res["tempo_segundos"] = round(time.monotonic() - inicio, 1)
     gravar(pasta_modelos, Artefatos(detector, df, teste_avaliado, res, pasta_modelos))
     if relatorio is not None:
-        graficos = Path(os.path.relpath(pasta_modelos / "graficos", Path(relatorio).parent)).as_posix()
-        Path(relatorio).write_text(_relatorio(res, graficos), encoding="utf-8")
+        # Os gráficos do relatório ficam em docs/graficos, versionado; modelos/ fica fora do git.
+        pasta_relatorio = Path(relatorio).parent / "docs" / "graficos"
+        pasta_relatorio.mkdir(parents=True, exist_ok=True)
+        for png in (pasta_modelos / "graficos").glob("*.png"):
+            shutil.copyfile(png, pasta_relatorio / png.name)
+        Path(relatorio).write_text(_relatorio(res, "docs/graficos"), encoding="utf-8")
     return res
+
+
+def _clientes_novos(X: pd.DataFrame, y: np.ndarray, treino: np.ndarray, teste: np.ndarray,
+                    alerta: np.ndarray) -> dict:
+    """Transações de clientes com menos de 5 compras anteriores, medidas à parte no teste."""
+    curto = X["historico_curto"].to_numpy() == 1
+    novos = curto[teste]
+    y_novos, alerta_novos = y[teste][novos], alerta[novos]
+    legitimas = y_novos == 0
+    return {
+        "transacoes_treino": int((curto & treino).sum()),
+        "transacoes": int(novos.sum()),
+        "fraudes": int(y_novos.sum()),
+        "alertas_pct": float(alerta_novos.mean()) if novos.any() else None,
+        "falsos_alertas_pct": float(alerta_novos[legitimas].mean()) if legitimas.any() else None,
+        "recall": float(alerta_novos[y_novos == 1].mean()) if y_novos.any() else None,
+        "falsos_alertas_pct_conhecidos": float(alerta[~novos][y[teste][~novos] == 0].mean()),
+    }
 
 
 def main() -> None:

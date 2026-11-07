@@ -19,9 +19,11 @@ que o gerador cria. Os resultados não valem automaticamente para fraudes reais.
 
 ## Como executar
 
+Precisa de Python 3.11 ou mais recente (exigência das versões fixadas em `requirements.txt`).
+
 ```bash
 pip install -r requirements.txt
-python treinar.py      # gera os dados, treina e avalia; grava modelos/ e RELATORIO.md (cerca de 1 minuto)
+python treinar.py      # gera os dados, treina e avalia; grava modelos/ e RELATORIO.md (1 a 2 minutos)
 python app.py          # abre a interface em http://127.0.0.1:5000
 python -m pytest       # testes automáticos
 ```
@@ -62,9 +64,16 @@ Duas decisões vão além das aulas, e o relatório explica as duas:
 
 ## Resultados
 
-Com 83.511 transações de 300 clientes e 823 fraudes, o modelo escolhido na validação foi o **Random Forest**. No
-teste, encontrou **84,6%** das fraudes, com **90,9%** dos alertas corretos (F1 de 0,876). O detalhe, com os
-gráficos e o recall de cada tipo de fraude, está em [`RELATORIO.md`](RELATORIO.md).
+Com 70.972 transações de 300 clientes e 713 fraudes, o modelo escolhido na validação foi o **Random Forest**. No
+teste, encontrou **70,0%** das fraudes, com **99,0%** dos alertas corretos (F1 de 0,820). O detalhe, com os
+gráficos, o recall de cada tipo de fraude e a medida dos clientes novos, está em [`RELATORIO.md`](RELATORIO.md).
+
+**Clientes novos.** Cerca de 25% dos clientes aderem depois dos primeiros 30 dias, para o modelo ver compras de
+clientes sem histórico no treino. Sem histórico não há comportamento habitual com que comparar, por isso o Isolation
+Forest não dá alerta nesses casos, e a interface avisa que a avaliação é menos fiável. Esta correção foi feita depois
+de uma primeira versão em que todos os clientes começavam no dia 1: aí o modelo nunca via um cliente novo e marcava
+como "Alto risco" as primeiras compras de madrugada. Com a mudança dos dados, os resultados também mudaram (antes:
+84,6% das fraudes apanhadas, 90,9% de alertas corretos).
 
 ## Estrutura
 
@@ -87,11 +96,11 @@ gráficos e o recall de cada tipo de fraude, está em [`RELATORIO.md`](RELATORIO
 
 - Os dados são sintéticos e de um único gerador.
 - O sistema só conhece os padrões de fraude que o gerador cria.
-- Clientes com menos de 5 compras são avaliados com pouca informação. Além disso, o modelo nunca viu um cliente
-  assim no treino (os 30 primeiros dias só formam o histórico), por isso apoia-se no horário e no valor brutos:
-  as primeiras compras de madrugada de um cliente novo tendem a sair como "Alto risco".
+- Clientes com menos de 5 compras são avaliados com pouca informação. O treino tem poucas fraudes de clientes
+  novos (2 no período de treino), por isso o modelo quase não alerta nesse grupo: uma compra muito alta ou num país
+  estranho de um cliente novo tende a sair como "Normal", só com o aviso de pouco histórico.
 - O perfil de cada cliente só muda quando o treino é executado de novo.
-- O Random Forest usa 100 árvores (o valor das aulas) em vez das 300 previstas no design, para o treino caber
-  em menos de 1 minuto. A mudança foi feita depois de ver o resultado do teste, por causa do tempo e não do
-  desempenho (F1 de 0,870 com 300 árvores e 0,876 com 100).
+- O Random Forest usa 100 árvores (o valor das aulas) em vez das 300 previstas no design, para o treino ser
+  mais rápido. A mudança foi feita depois de ver o resultado do teste, por causa do tempo e não do desempenho
+  (na primeira versão dos dados, F1 de 0,870 com 300 árvores e 0,876 com 100).
 - Os ficheiros de modelo usam joblib (pickle): carregue apenas modelos gerados por si.
