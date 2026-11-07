@@ -19,3 +19,17 @@ def artefatos_pequenos():
     y = df["fraude"].to_numpy()
     detector, _ = treinar(X[p["treino"]], y[p["treino"]], X[p["validacao"]], y[p["validacao"]])
     return Artefatos(detector, df, pd.DataFrame(), {}, Path("."))
+
+
+@pytest.fixture(scope="session")
+def pasta_pequena(artefatos_pequenos, tmp_path_factory):
+    from detector.artefatos import gravar
+    pasta = tmp_path_factory.mktemp("modelos_pequenos")
+    gravar(pasta, artefatos_pequenos)
+    return pasta
+
+
+@pytest.fixture()
+def cliente(pasta_pequena):
+    from app import criar_app
+    return criar_app(pasta_pequena).test_client()

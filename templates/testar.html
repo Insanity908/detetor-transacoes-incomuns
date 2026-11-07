@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block conteudo %}
+<div class="colunas">
+  <section aria-labelledby="titulo-form">
+    <h1 id="titulo-form">Testar transação</h1>
+    <p class="ajuda">Escolha um exemplo ou descreva uma compra. O sistema compara-a com o comportamento habitual do cliente.</p>
+    <form method="post" class="exemplos">
+      {% for nome, descricao in exemplos %}
+      <button type="submit" name="exemplo" value="{{ nome }}" class="secundario">{{ descricao }}</button>
+      {% endfor %}
+    </form>
+    <form method="post" class="formulario">
+      <label>Cliente
+        <input name="cliente" list="lista-clientes" value="{{ valores.cliente or '' }}" required autocomplete="off"
+               placeholder="C0001 ou um código novo">
+      </label>
+      <label>Data e hora
+        <input name="data_hora" type="datetime-local" value="{{ valores.data_hora or '' }}" required>
+      </label>
+      <label>Valor (MT)
+        <input name="valor" inputmode="decimal" value="{{ valores.valor or '' }}" required placeholder="1450">
+      </label>
+      <label>Cidade
+        <input name="cidade" list="lista-cidades" value="{{ valores.cidade or '' }}" required autocomplete="off">
+      </label>
+      <label>País
+        <input name="pais" list="lista-paises" value="{{ valores.pais or '' }}" required autocomplete="off" placeholder="MZ">
+      </label>
+      <label>Categoria
+        <input name="categoria" list="lista-categorias" value="{{ valores.categoria or '' }}" required autocomplete="off">
+      </label>
+      <button type="submit" class="principal">Avaliar transação</button>
+    </form>
+    <datalist id="lista-clientes">{% for c in clientes %}<option value="{{ c }}">{% endfor %}</datalist>
+    <datalist id="lista-cidades">{% for c in cidades %}<option value="{{ c.title() }}">{% endfor %}</datalist>
+    <datalist id="lista-paises">{% for p in paises %}<option value="{{ p }}">{% endfor %}</datalist>
+    <datalist id="lista-categorias">{% for c in categorias %}<option value="{{ c }}">{{ c | categoria }}</option>{% endfor %}</datalist>
+    {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  </section>
+
+  <section aria-labelledby="titulo-resultado" aria-live="polite">
+    <h2 id="titulo-resultado">Resultado</h2>
+    {% if linhas %}
+      {% set principal = linhas[-1] %}{# numa sequência, a última compra tem todo o contexto #}
+      <div class="leitura nivel-{{ classe_nivel[principal.nivel] }}">
+        <p class="selo">{{ principal.nivel }}</p>
+        <dl class="medidas">
+          <div><dt>Risco</dt><dd>{{ principal.risco | decimal(0) }}<small>/100</small></dd></div>
+          <div><dt>Anomalia</dt><dd>{{ principal.anomalia | decimal(0) }}<small>/100</small></dd></div>
+        </dl>
+        <p class="ajuda">O risco vem do classificador e a anomalia do Isolation Forest. Em ambos, 50 é o limite de alerta.</p>
+        {% if principal.motivos %}
+        <h3>Por que parece estranha</h3>
+        <ul class="motivos">{% for m in principal.motivos %}<li>{{ m }}</li>{% endfor %}</ul>
+        {% else %}
+        <p>Nada foge do comportamento habitual deste cliente.</p>
+        {% endif %}
+      </div>
+      {% if linhas | length > 1 %}
+      <h3>Compra a compra</h3>
+      <div class="rolagem"><table>
+        <thead><tr><th>Hora</th><th class="num">Valor</th><th class="num">Risco</th><th class="num">Anomalia</th><th>Nível</th></tr></thead>
+        <tbody>
+        {% for l in linhas %}
+          <tr class="compra"><td>{{ l.data_hora.strftime('%H:%M') }}</td><td class="num">{{ l.valor | mt }}</td>
+            <td class="num">{{ l.risco | decimal(0) }}</td><td class="num">{{ l.anomalia | decimal(0) }}</td>
+            <td><span class="etiqueta nivel-{{ classe_nivel[l.nivel] }}">{{ l.nivel }}</span></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% endif %}
+      <p class="ajuda">Cliente {{ principal.cliente }} · {{ principal.data_hora.strftime('%d/%m/%Y %H:%M') }} ·
+        {{ principal.valor | mt }} · {{ principal.cidade | title }} · {{ principal.pais | upper }} · {{ principal.categoria | categoria }}</p>
+    {% else %}
+      <p class="vazio">O nível de risco, a anomalia e os motivos aparecem aqui.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
