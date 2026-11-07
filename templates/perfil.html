@@ -45,7 +45,7 @@
       <li class="leitura nivel-{{ classe_nivel[m.nivel] }}">
         <p><span class="etiqueta nivel-{{ classe_nivel[m.nivel] }}">{{ m.nivel }}</span>
           {{ m.data_hora.strftime('%d/%m/%Y %H:%M') }} · {{ m.valor | mt }} · {{ m.cidade | title }} · {{ m.pais }} · {{ m.categoria | categoria }}</p>
-        <p class="ajuda">Risco {{ m.risco | decimal(0) }} · Anomalia {{ m.anomalia | decimal(0) }} ·
+        <p class="ajuda">Risco {{ m.risco | nota }} · Anomalia {{ m.anomalia | nota }} ·
           Rótulo do gerador: {{ "fraude (" ~ m.tipo_fraude ~ ")" if m.fraude else "legítima" }}</p>
         {% if m.motivos %}<ul class="motivos">{% for t in m.motivos %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
       </li>

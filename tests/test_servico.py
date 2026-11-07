@@ -163,3 +163,17 @@ def test_valor_enorme_e_cidade_nunca_vista_nao_quebram(artefatos_pequenos):
     nova = pd.DataFrame([_linha(valor=1e9, cidade="LICHINGA", categoria="JOIAS")])
     r = avaliar_transacoes(artefatos_pequenos, nova)
     assert 0 <= r.risco.iloc[0] <= 100 and 0 <= r.anomalia.iloc[0] <= 100
+
+
+def test_usa_so_o_historico_dos_clientes_enviados(artefatos_pequenos, monkeypatch):
+    import detector.servico as servico
+    vistos = {}
+    original = servico.calcular_features
+
+    def espiao(df, historico=None):
+        vistos["clientes"] = set(historico["cliente"].astype(str).str.strip())
+        return original(df, historico=historico)
+
+    monkeypatch.setattr(servico, "calcular_features", espiao)
+    avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(cliente=" C0001 ")]))
+    assert vistos["clientes"] == {"C0001"}  # sem isto, cada pedido recalcula o histórico de todos os clientes

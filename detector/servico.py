@@ -13,6 +13,8 @@ def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame) -> pd.Dat
     historico = artefatos.historico
     if "id_transacao" in historico.columns:  # uma transação já guardada não pode ser o próprio passado
         historico = historico[~historico["id_transacao"].isin(transacoes["id_transacao"])]
+    clientes = set(transacoes["cliente"].astype(str).str.strip())  # só o passado de quem foi enviado
+    historico = historico[historico["cliente"].astype(str).str.strip().isin(clientes)]
     features = calcular_features(transacoes, historico=historico)
     return montar_resultado(transacoes, features, artefatos.detector.avaliar(features), historico)
 

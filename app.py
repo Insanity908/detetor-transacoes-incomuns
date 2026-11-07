@@ -71,6 +71,10 @@ def criar_app(pasta_modelos: Path = RAIZ / "modelos") -> Flask:
     def _decimal(valor, casas=1):
         return formatar_decimal(float(valor), casas)
 
+    @app.template_filter("nota")
+    def _nota(valor):
+        return str(int(float(valor)))  # trunca: 49,6 mostra 49, abaixo do limite de alerta (50)
+
     @app.template_filter("pct")
     def _pct(valor):
         return "—" if valor is None else f"{formatar_decimal(100 * float(valor))}%"

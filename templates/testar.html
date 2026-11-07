@@ -46,8 +46,8 @@
       <div class="leitura nivel-{{ classe_nivel[principal.nivel] }}">
         <p class="selo">{{ principal.nivel }}</p>
         <dl class="medidas">
-          <div><dt>Risco</dt><dd>{{ principal.risco | decimal(0) }}<small>/100</small></dd></div>
-          <div><dt>Anomalia</dt><dd>{{ principal.anomalia | decimal(0) }}<small>/100</small></dd></div>
+          <div><dt>Risco</dt><dd>{{ principal.risco | nota }}<small>/100</small></dd></div>
+          <div><dt>Anomalia</dt><dd>{{ principal.anomalia | nota }}<small>/100</small></dd></div>
         </dl>
         <p class="ajuda">O risco vem do classificador e a anomalia do Isolation Forest. Em ambos, 50 é o limite de alerta.</p>
         {% if principal.motivos %}
@@ -64,7 +64,7 @@
         <tbody>
         {% for l in linhas %}
           <tr class="compra"><td>{{ l.data_hora.strftime('%H:%M') }}</td><td class="num">{{ l.valor | mt }}</td>
-            <td class="num">{{ l.risco | decimal(0) }}</td><td class="num">{{ l.anomalia | decimal(0) }}</td>
+            <td class="num">{{ l.risco | nota }}</td><td class="num">{{ l.anomalia | nota }}</td>
             <td><span class="etiqueta nivel-{{ classe_nivel[l.nivel] }}">{{ l.nivel }}</span></td></tr>
         {% endfor %}
         </tbody>

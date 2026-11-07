@@ -165,3 +165,8 @@ def test_filtro_tira_as_linhas_normais(cliente, artefatos_pequenos):
     chave = re.search(r"/analisar/([\w-]+)\?alertas=1", html).group(1)
     filtrado = cliente.get(f"/analisar/{chave}?alertas=1").get_data(as_text=True)
     assert filtrado.count("data-risco=") < html.count("data-risco=") and "Normal</span>" not in filtrado
+
+
+def test_nota_nunca_arredonda_para_o_limite(cliente):
+    nota = cliente.application.jinja_env.filters["nota"]
+    assert nota(49.6) == "49" and nota(50.0) == "50" and nota(77.9) == "77"

@@ -25,8 +25,8 @@
     <th>Data e hora</th><th class="num">Valor</th><th>Cidade</th><th>País</th><th>Categoria</th><th>Motivos</th></tr></thead>
   <tbody>
   {% for l in linhas %}
-    <tr data-risco="{{ l.risco | round | int }}">
-      <td class="num">{{ l.risco | decimal(0) }}</td><td class="num">{{ l.anomalia | decimal(0) }}</td>
+    <tr data-risco="{{ l.risco | int }}">
+      <td class="num">{{ l.risco | nota }}</td><td class="num">{{ l.anomalia | nota }}</td>
       <td><span class="etiqueta nivel-{{ classe_nivel[l.nivel] }}">{{ l.nivel }}</span></td>
       <td>{{ l.id_transacao }}</td><td>{{ l.cliente }}</td><td>{{ l.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
       <td class="num">{{ l.valor | mt }}</td><td>{{ l.cidade }}</td><td>{{ l.pais }}</td><td>{{ l.categoria | categoria }}</td>
