@@ -20,7 +20,7 @@ _HORA_NS = 3_600 * 10**9
 def normalizar(df: pd.DataFrame) -> pd.DataFrame:
     """Compara sem depender de espaços ou maiúsculas: ` mz ` e `MZ` são o mesmo país."""
     out = df.copy()
-    out["cliente"] = out["cliente"].astype(str).str.strip()
+    out["cliente"] = out["cliente"].astype(str).str.strip().str.upper()  # c0001 e C0001 são o mesmo cliente
     for coluna in ("cidade", "pais", "categoria"):
         out[coluna] = out[coluna].astype(str).str.strip().str.upper()
     out["data_hora"] = pd.to_datetime(out["data_hora"])
@@ -89,7 +89,7 @@ def calcular_features(df: pd.DataFrame, historico: pd.DataFrame | None = None) -
 def perfil_cliente(historico: pd.DataFrame, cliente: str) -> dict | None:
     """O comportamento normal do cliente, só com as compras legítimas."""
     dados = normalizar(historico)
-    dados = dados[dados["cliente"] == str(cliente).strip()]
+    dados = dados[dados["cliente"] == str(cliente).strip().upper()]
     if "fraude" in dados.columns:
         dados = dados[dados["fraude"] == 0]
     if dados.empty:

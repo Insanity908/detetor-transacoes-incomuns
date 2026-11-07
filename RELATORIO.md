@@ -1,6 +1,6 @@
 # Relatório do treino
 
-Gerado por `python treinar.py` em 2026-11-07T14:29:39, em 57,7 s. Dados sintéticos, gerados para a disciplina; os resultados não valem para fraudes reais.
+Gerado por `python treinar.py` em 2026-11-07T16:40:37, em 52,5 s. Dados sintéticos, gerados para a disciplina; os resultados não valem para fraudes reais.
 
 ## Dados
 
@@ -64,7 +64,7 @@ No teste: 110 fraudes apanhadas, 20 deixadas passar, 11 alertas falsos e 12.348 
 
 ## Isolation Forest
 
-Treinado sem os rótulos (aprendizado não supervisionado), com o limiar que marca 2% da validação. No teste, apanhou 3 fraudes que o classificador deixou passar; essas transações aparecem com o nível "Atenção".
+Treinado sem os rótulos (aprendizagem não supervisionada), com o limiar que marca 2% da validação. No teste, apanhou 3 fraudes que o classificador deixou passar; essas transações aparecem com o nível "Atenção".
 
 ## Importância das features
 
@@ -94,6 +94,18 @@ PR AUC de cada coluna bruta usada sozinha no teste. Precisa de ficar bem abaixo 
 | pais | 0,117 |
 | categoria | 0,011 |
 | cidade | 0,010 |
+
+## Atalhos por tipo de fraude
+
+A mesma medida, para cada tipo separadamente. O tipo "país estranho" é, por definição, uma compra num país fora de MZ e ZA, por isso a coluna bruta do país denuncia-o; o modelo não usa essa coluna, só a feature "país novo", que compara com o histórico do próprio cliente.
+
+| Tipo | valor | hora | pais | categoria | cidade |
+|---|---|---|---|---|---|
+| Valor alto | 0,062 | 0,001 | 0,001 | 0,001 | 0,001 |
+| País estranho | 0,002 | 0,001 | 1,000 | 0,001 | 0,001 |
+| Horário estranho | 0,002 | 0,031 | 0,001 | 0,001 | 0,001 |
+| Rajada | 0,295 | 0,013 | 0,007 | 0,006 | 0,005 |
+| Conta tomada | 0,004 | 0,001 | 0,001 | 0,002 | 0,002 |
 
 ## Limitações
 

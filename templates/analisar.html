@@ -17,7 +17,7 @@
   <p><strong>{{ total }}</strong> transações analisadas, <strong>{{ alertas }}</strong> com alerta (alto risco ou atenção).</p>
   <p class="acoes">
     {% if so_alertas %}<a href="/analisar/{{ chave }}">Mostrar todas</a>{% else %}<a href="/analisar/{{ chave }}?alertas=1">Mostrar só os alertas</a>{% endif %}
-    <a href="/analisar/{{ chave }}.csv" class="botao">Baixar resultado em CSV</a>
+    <a href="/analisar/{{ chave }}.csv" class="botao">Descarregar resultado em CSV</a>
   </p>
   {% if linhas | length == limite %}<p class="ajuda">A tabela mostra as {{ limite }} de maior risco; o download tem todas.</p>{% endif %}
 </div>

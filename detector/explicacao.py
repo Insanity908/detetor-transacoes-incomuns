@@ -1,4 +1,4 @@
-"""Motivos em linguagem simples: por que uma transação parece estranha para aquele cliente."""
+"""Motivos em linguagem simples: porque é que uma transação parece estranha para aquele cliente."""
 from __future__ import annotations
 
 from .gerador import PAIS_HABITUAL
@@ -51,5 +51,5 @@ def motivos(transacao: dict, features: dict, perfil: dict | None) -> list[str]:
             texto += f"; o normal deste cliente é {formatar_decimal(perfil['compras_por_dia'])} por dia"
         lista.append(texto)
     if features["historico_curto"]:
-        lista.append("Cliente com pouco histórico: a avaliação é menos confiável")
+        lista.append("Cliente com pouco histórico: a avaliação é menos fiável")
     return lista

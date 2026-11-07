@@ -174,3 +174,29 @@ def test_nota_nunca_arredonda_para_o_limite(cliente):
 
 def test_pagina_de_envio_avisa_a_espera(cliente):
     assert "pode demorar até um minuto" in cliente.get("/analisar").get_data(as_text=True)
+
+
+# --------------------------------------------- pontos menores da revisão final
+def test_neutraliza_tab_e_retorno_no_inicio():
+    from app import _neutralizar
+    assert _neutralizar("\tx") == "'\tx" and _neutralizar("\rx") == "'\rx" and _neutralizar("ok") == "ok"
+
+
+def test_perfil_mostra_o_nome_do_tipo_de_fraude(cliente_treinado, pasta_treinada):
+    from detector.artefatos import carregar
+    teste = carregar(pasta_treinada).teste_avaliado
+    alvo = teste[(teste.nivel != "Normal") & teste.tipo_fraude.str.contains("_")]
+    marcado = alvo.cliente.iloc[0]
+    html = cliente_treinado.get(f"/perfil?cliente={marcado}").get_data(as_text=True)
+    assert "fraude (" in html and not re.search(r"fraude \([a-z]+_[a-z]+\)", html)
+
+
+def test_perfil_aceita_codigo_em_minusculas(cliente):
+    assert cliente.get("/perfil?cliente=c0001").status_code == 200
+
+
+def test_textos_em_portugues_de_mocambique(cliente):
+    html = cliente.post("/", data={"exemplo": "valor_alto"}).get_data(as_text=True)
+    assert "Porque parece estranha" in html
+    pagina = _enviar(cliente, CSV_VALIDO.encode()).get_data(as_text=True)
+    assert "Descarregar resultado" in pagina and "Baixar" not in pagina

@@ -21,7 +21,7 @@ que o gerador cria. Os resultados não valem automaticamente para fraudes reais.
 
 ```bash
 pip install -r requirements.txt
-python treinar.py      # gera os dados, treina e avalia; grava modelos/ e RELATORIO.md (menos de 1 minuto)
+python treinar.py      # gera os dados, treina e avalia; grava modelos/ e RELATORIO.md (cerca de 1 minuto)
 python app.py          # abre a interface em http://127.0.0.1:5000
 python -m pytest       # testes automáticos
 ```
@@ -48,7 +48,7 @@ datas podem estar em `aaaa-mm-dd hh:mm` ou `dd/mm/aaaa hh:mm`.
 | Divisão em treino e teste | `dividir_periodos` em `detector/avaliacao.py`: treino, validação e teste por tempo. A divisão aleatória das aulas (`train_test_split`) é comparada em `treinar.py` |
 | Normalização (`StandardScaler`) | `criar_classificadores` em `detector/modelos.py`, dentro de cada `Pipeline` |
 | Classificação supervisionada | Regressão logística, Random Forest e Gradient Boosting em `detector/modelos.py` |
-| Aprendizado não supervisionado | Isolation Forest em `detector/modelos.py`, treinado sem os rótulos |
+| Aprendizagem não supervisionada | Isolation Forest em `detector/modelos.py`, treinado sem os rótulos |
 | Métricas e matriz de confusão | `metricas` em `detector/avaliacao.py`; página Modelos e `RELATORIO.md` |
 | Importância das features | `permutation_importance` em `treinar.py`; gráfico na página Modelos |
 | Previsão de dados novos | `avaliar_transacoes` em `detector/servico.py`; páginas Testar e Analisar |

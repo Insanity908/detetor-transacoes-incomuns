@@ -53,15 +53,15 @@ def _int(v: int) -> str:
     return formatar_decimal(v, 0)
 
 
-def _atalhos(df: pd.DataFrame, treino: np.ndarray, teste: np.ndarray) -> dict[str, float]:
+def _atalhos(df: pd.DataFrame, treino: np.ndarray, teste: np.ndarray, y: np.ndarray | None = None) -> dict[str, float]:
     """PR AUC de cada coluna bruta sozinha no teste: se alguma for alta, o gerador deixou um atalho."""
-    y = df["fraude"].to_numpy()
+    y = df["fraude"].to_numpy() if y is None else y
     resultado = {}
     for coluna, serie in (("valor", df["valor"]), ("hora", df["data_hora"].dt.hour)):
         s = serie.to_numpy(float)[teste]
         resultado[coluna] = max(average_precision_score(y[teste], s), average_precision_score(y[teste], -s))
     for coluna in ("pais", "categoria", "cidade"):
-        taxa = df[treino].groupby(coluna)["fraude"].mean()
+        taxa = pd.Series(y[treino]).groupby(df.loc[treino, coluna].to_numpy()).mean()
         s = df.loc[teste, coluna].map(taxa).fillna(y[treino].mean()).to_numpy()
         resultado[coluna] = float(average_precision_score(y[teste], s))
     return {k: float(v) for k, v in resultado.items()}
@@ -192,7 +192,7 @@ def _relatorio(res: dict, graficos: str) -> str:
         *[f"| {NOMES_TIPO_FRAUDE[t]} | {_pct(res['recall_por_tipo']['escolhido'].get(t))} "
           f"| {_pct(res['recall_por_tipo']['isolation_forest'].get(t))} |" for t in TIPOS_FRAUDE],
         "", "## Isolation Forest", "",
-        "Treinado sem os rótulos (aprendizado não supervisionado), com o limiar que marca 2% da validação. "
+        "Treinado sem os rótulos (aprendizagem não supervisionada), com o limiar que marca 2% da validação. "
         f"No teste, apanhou {res['ganho_isolation']} fraudes que o classificador deixou passar; essas "
         "transações aparecem com o nível \"Atenção\".", "",
         "## Importância das features", "",
@@ -211,6 +211,13 @@ def _relatorio(res: dict, graficos: str) -> str:
         f"({_num(teste['pr_auc'])}); senão, o gerador deixou uma pista fácil.", "",
         "| Coluna | PR AUC |", "|---|---|",
         *[f"| {c} | {_num(v)} |" for c, v in res["atalhos"].items()], "",
+        "## Atalhos por tipo de fraude", "",
+        "A mesma medida, para cada tipo separadamente. O tipo \"país estranho\" é, por definição, uma compra "
+        "num país fora de MZ e ZA, por isso a coluna bruta do país denuncia-o; o modelo não usa essa coluna, só "
+        "a feature \"país novo\", que compara com o histórico do próprio cliente.", "",
+        "| Tipo | " + " | ".join(res["atalhos"]) + " |", "|---|" + "---|" * len(res["atalhos"]),
+        *[f"| {NOMES_TIPO_FRAUDE[t]} | " + " | ".join(_num(v) for v in res["atalhos_por_tipo"][t].values()) + " |"
+          for t in TIPOS_FRAUDE], "",
         "## Limitações", "",
         "- Os dados são sintéticos e de um único gerador; os resultados não valem automaticamente para "
         "fraudes reais.",
@@ -273,6 +280,8 @@ def executar(pasta_modelos: Path = Path("modelos"), pasta_dados: Path = Path("da
                                                                  y[~p["aquecimento"]])},
         "aviso_gerador_facil": modelos[detector.escolhido]["teste"]["f1"] > LIMITE_GERADOR_FACIL,
         "atalhos": _atalhos(df, tr, te),
+        "atalhos_por_tipo": {t: _atalhos(df, tr, te, (df["tipo_fraude"] == t).to_numpy().astype(int))
+                             for t in TIPOS_FRAUDE},
     }
     _graficos(pasta_modelos / "graficos", res)
     teste_avaliado = montar_resultado(df[te], X[te], avaliado, df[~te])  # reaproveita as features já calculadas

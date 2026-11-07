@@ -32,11 +32,13 @@ MAX_LINHAS_TABELA = 500
 MAX_RESULTADOS = 20
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
+INICIO_PERIGOSO = ("\t", "\r")
 
 
 def _neutralizar(texto: str) -> str:
     """Impede que um texto do ficheiro vire fórmula ao abrir o CSV no Excel."""
-    return "'" + texto if texto.lstrip().startswith(INICIO_FORMULA) else texto
+    perigoso = texto.startswith(INICIO_PERIGOSO) or texto.lstrip().startswith(INICIO_FORMULA)
+    return "'" + texto if perigoso else texto
 
 
 def _csv_excel(resultado: pd.DataFrame) -> bytes:
@@ -175,8 +177,8 @@ def criar_app(pasta_modelos: Path = RAIZ / "modelos") -> Flask:
 
     @app.get("/perfil")
     def perfil():
-        codigo = request.args.get("cliente", "").strip()
-        dados = {"clientes": clientes, "codigo": codigo, "perfil": None, "marcadas": []}
+        codigo = request.args.get("cliente", "").strip().upper()
+        dados = {"clientes": clientes, "codigo": codigo, "perfil": None, "marcadas": [], "tipos": NOMES_TIPO_FRAUDE}
         if not codigo:
             return render_template("perfil.html", **dados)
         art = app.config["ARTEFATOS"]
@@ -185,7 +187,7 @@ def criar_app(pasta_modelos: Path = RAIZ / "modelos") -> Flask:
             return render_template("perfil.html", **dados, erro="Cliente não encontrado."), 404
         teste = art.teste_avaliado
         if len(teste):
-            marcadas = teste[(teste["cliente"].astype(str).str.strip() == codigo) & (teste["nivel"] != "Normal")]
+            marcadas = teste[(teste["cliente"].astype(str).str.strip().str.upper() == codigo) & (teste["nivel"] != "Normal")]
             dados["marcadas"] = marcadas.sort_values("data_hora").to_dict("records")
         dados["maximo_hora"] = max(dados["perfil"]["horas"]) or 1
         return render_template("perfil.html", **dados)

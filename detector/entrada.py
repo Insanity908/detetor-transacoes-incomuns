@@ -10,6 +10,7 @@ import pandas as pd
 COLUNAS = ["cliente", "data_hora", "valor", "cidade", "pais", "categoria"]
 MAX_BYTES = 5 * 1024 * 1024
 MILHARES = re.compile(r"\d{1,3}(\.\d{3})+")
+ESPACO_MILHAR = re.compile(r"(?<=\d)[ \u00a0\u202f](?=\d{3})")  # "1 234,50", também com espaço fino
 FORMATOS_DATA = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
                  "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M")
 
@@ -53,6 +54,7 @@ def _data(texto: str) -> datetime | None:
 def _valor(texto: str, virgula_decimal: bool) -> float | None:
     """Com `;`, "1.450,50" e "1.500" usam ponto de milhar; "1234.50" usa ponto decimal.
     Com `,` ou no formulário, "1.500" é ambíguo (1,5 ou 1500?) e é recusado."""
+    texto = ESPACO_MILHAR.sub("", texto)
     so_milhares = MILHARES.fullmatch(texto) is not None
     if "," in texto:
         texto = texto.replace(".", "").replace(",", ".")

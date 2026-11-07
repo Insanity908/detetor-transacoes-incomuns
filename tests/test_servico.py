@@ -58,7 +58,7 @@ def test_motivos_de_cidade_categoria_hora_e_frequencia():
 
 def test_historico_curto_e_sem_perfil():
     m = motivos(TRANSACAO, SEM_DESVIO | {"historico_curto": 1, "compras_ultima_hora": 4}, None)
-    assert m == ["5 compras na última hora", "Cliente com pouco histórico: a avaliação é menos confiável"]
+    assert m == ["5 compras na última hora", "Cliente com pouco histórico: a avaliação é menos fiável"]
 
 
 # ------------------------------------------------------------------ entrada
@@ -212,3 +212,42 @@ def test_linha_vazia_no_meio_nao_muda_a_numeracao():
     bruto = PONTO_VIRGULA + "C1;01/05/2026 14:30;150;a;MZ;b\n;;;;;\nC1;ontem;150;a;MZ;b\n"
     with pytest.raises(ValueError, match="Linha 4"):
         validar(ler_csv(bruto.encode()))
+
+
+# --------------------------------------------- pontos menores da revisão final
+@pytest.mark.parametrize("valor", ["1 234,50", "1 234,50", "1 234,50"])
+def test_milhares_separados_por_espaco(valor):
+    df = validar(ler_csv((PONTO_VIRGULA + f"C1;01/05/2026 14:30;{valor};a;MZ;b\n").encode()))
+    assert df.valor.iloc[0] == 1234.5
+
+
+def test_codigo_do_cliente_nao_depende_de_maiusculas(artefatos_pequenos):
+    r = avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(cliente="c0001")]))
+    assert not r.historico_curto.iloc[0]
+
+
+def test_id_igual_de_outra_compra_nao_apaga_o_historico(artefatos_pequenos, monkeypatch):
+    import detector.servico as servico
+    hist = artefatos_pequenos.historico
+    alheia = hist[hist.cliente == "C0001"].iloc[10]
+    vistos = {}
+    original = servico.calcular_features
+
+    def espiao(df, historico=None):
+        vistos["ids"] = set(historico["id_transacao"])
+        return original(df, historico=historico)
+
+    monkeypatch.setattr(servico, "calcular_features", espiao)
+    nova = _linha(id_transacao=alheia.id_transacao, data_hora=pd.Timestamp("2026-04-29 10:00"), valor=33.0)
+    avaliar_transacoes(artefatos_pequenos, pd.DataFrame([nova]))
+    assert alheia.id_transacao in vistos["ids"]  # mesmo ID, outra compra: o histórico fica
+
+
+def test_habitual_do_motivo_usa_so_o_passado(artefatos_pequenos):
+    from detector.perfis import perfil_cliente
+    hist = artefatos_pequenos.historico
+    compras = hist[(hist.cliente == "C0001") & (hist.fraude == 0)]
+    quando = compras.data_hora.iloc[30] + pd.Timedelta(minutes=1)
+    r = avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(data_hora=quando, valor=compras.valor.median() * 50)]))
+    esperado = perfil_cliente(hist[hist.data_hora < quando], "C0001")["valor_mediana"]
+    assert f"(habitual: {formatar_mt(esperado)})" in r.motivos.iloc[0][0]

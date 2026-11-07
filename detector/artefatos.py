@@ -37,7 +37,7 @@ def carregar(pasta: Path) -> Artefatos | None:
     pasta = Path(pasta)
     if not all((pasta / f).exists() for f in FICHEIROS):
         return None
-    try:  # joblib usa pickle: carregue apenas modelos gerados por você mesmo
+    try:  # joblib usa pickle: carregue apenas modelos gerados por si
         detector = joblib.load(pasta / "detector.joblib")
         historico = joblib.load(pasta / "historico.joblib")
         teste = joblib.load(pasta / "teste_avaliado.joblib")

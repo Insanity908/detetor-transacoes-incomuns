@@ -1,8 +1,9 @@
 """Gerador de transações sintéticas de clientes em Moçambique, com fraudes rotuladas.
 
 Cada cliente tem hábitos próprios (cidade, valor típico, horário, categorias, frequência). As fraudes
-fogem desses hábitos, mas nenhuma pode ser reconhecida por uma única coluna: as categorias das fraudes
-seguem as proporções das compras legítimas, e os valores dependem do valor típico de cada cliente.
+fogem desses hábitos. As categorias das fraudes seguem as proporções das compras legítimas, e os valores
+dependem do valor típico de cada cliente. A exceção é o tipo "país estranho", que por definição acontece num
+país fora de MZ e ZA: a coluna bruta do país denuncia-o, mas o modelo não a usa, só a feature `pais_novo`.
 """
 from __future__ import annotations
 
