@@ -177,3 +177,38 @@ def test_usa_so_o_historico_dos_clientes_enviados(artefatos_pequenos, monkeypatc
     monkeypatch.setattr(servico, "calcular_features", espiao)
     avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(cliente=" C0001 ")]))
     assert vistos["clientes"] == {"C0001"}  # sem isto, cada pedido recalcula o histórico de todos os clientes
+
+
+# ------------------------------------------------- achados da revisão final
+PONTO_VIRGULA = "cliente;data_hora;valor;cidade;pais;categoria\n"
+
+
+@pytest.mark.parametrize("valor,esperado", [("1234.50", 1234.5), ("1.500", 1500.0), ("1.450,50", 1450.5),
+                                            ("2.345.678", 2345678.0), ("80", 80.0)])
+def test_ponto_e_virgula_com_ponto_decimal_nao_multiplica_o_valor(valor, esperado):
+    df = validar(ler_csv((PONTO_VIRGULA + f"C1;01/05/2026 14:30;{valor};Maputo;MZ;b\n").encode()))
+    assert df.valor.iloc[0] == esperado
+
+
+def test_virgula_com_milhar_ambiguo_e_recusado():
+    with pytest.raises(ValueError, match="Linha 2"):
+        validar(ler_csv((CABECALHO + "C1,2026-05-01 14:30,1.500,a,MZ,b\n").encode()))
+
+
+def test_csv_do_excel_em_cp1252_e_lido():
+    bruto = PONTO_VIRGULA + "C1;01/05/2026 14:30;150,00;Maputo;MZ;Farmácia\n"
+    df = validar(ler_csv(bruto.encode("cp1252")))
+    assert df.categoria.iloc[0] == "Farmácia"
+
+
+def test_linhas_vazias_do_excel_sao_ignoradas():
+    bruto = PONTO_VIRGULA + "C1;01/05/2026 14:30;150,00;Maputo;MZ;b\n;;;;;\n;;;;;\n"
+    assert len(validar(ler_csv(bruto.encode()))) == 1
+    with pytest.raises(ValueError, match="não tem transações"):
+        ler_csv((PONTO_VIRGULA + ";;;;;\n").encode())
+
+
+def test_linha_vazia_no_meio_nao_muda_a_numeracao():
+    bruto = PONTO_VIRGULA + "C1;01/05/2026 14:30;150;a;MZ;b\n;;;;;\nC1;ontem;150;a;MZ;b\n"
+    with pytest.raises(ValueError, match="Linha 4"):
+        validar(ler_csv(bruto.encode()))

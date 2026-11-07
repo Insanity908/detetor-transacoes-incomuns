@@ -4,7 +4,8 @@
 <h1>Analisar ficheiro</h1>
 <p class="ajuda">Envie um CSV com as colunas <code>cliente, data_hora, valor, cidade, pais, categoria</code>
   (<code>id_transacao</code> é opcional), até 5 MB. Ficheiros do Excel em português, com <code>;</code> e vírgula decimal, também são aceites.
-  O histórico de cada cliente vem dos dados de treino e das linhas anteriores do próprio ficheiro.</p>
+  O histórico de cada cliente vem dos dados de treino e das linhas anteriores do próprio ficheiro.
+  Um ficheiro grande, perto dos 5 MB, pode demorar até um minuto a ser analisado.</p>
 <form method="post" action="/analisar" enctype="multipart/form-data" class="envio">
   <label>Ficheiro CSV <input type="file" name="ficheiro" accept=".csv,text/csv" required></label>
   <button type="submit" class="principal">Analisar</button>

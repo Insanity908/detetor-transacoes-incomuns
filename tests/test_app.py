@@ -170,3 +170,7 @@ def test_filtro_tira_as_linhas_normais(cliente, artefatos_pequenos):
 def test_nota_nunca_arredonda_para_o_limite(cliente):
     nota = cliente.application.jinja_env.filters["nota"]
     assert nota(49.6) == "49" and nota(50.0) == "50" and nota(77.9) == "77"
+
+
+def test_pagina_de_envio_avisa_a_espera(cliente):
+    assert "pode demorar até um minuto" in cliente.get("/analisar").get_data(as_text=True)

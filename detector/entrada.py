@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import io
+import re
 from datetime import datetime
 
 import pandas as pd
 
 COLUNAS = ["cliente", "data_hora", "valor", "cidade", "pais", "categoria"]
 MAX_BYTES = 5 * 1024 * 1024
+MILHARES = re.compile(r"\d{1,3}(\.\d{3})+")
 FORMATOS_DATA = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
                  "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M")
 
@@ -19,7 +21,7 @@ def ler_csv(conteudo: bytes) -> pd.DataFrame:
     try:
         texto = conteudo.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise ValueError("O ficheiro não está em UTF-8: guarde-o como CSV UTF-8 e envie de novo") from None
+        texto = conteudo.decode("cp1252", errors="replace")  # o "CSV" padrão do Excel no Windows
     primeira = texto.split("\n", 1)[0]
     separador = ";" if primeira.count(";") > primeira.count(",") else ","
     try:
@@ -30,6 +32,7 @@ def ler_csv(conteudo: bytes) -> pd.DataFrame:
     faltam = [c for c in COLUNAS if c not in df.columns]
     if faltam:
         raise ValueError(f"Faltam as colunas: {', '.join(faltam)}")
+    df = df[(df[COLUNAS].apply(lambda c: c.str.strip()) != "").any(axis=1)]  # linhas ;;;;; do Excel
     if df.empty:
         raise ValueError("O ficheiro não tem transações")
     if "id_transacao" not in df.columns or (df["id_transacao"].str.strip() == "").all():
@@ -48,10 +51,15 @@ def _data(texto: str) -> datetime | None:
 
 
 def _valor(texto: str, virgula_decimal: bool) -> float | None:
-    if virgula_decimal:
+    """Com `;`, "1.450,50" e "1.500" usam ponto de milhar; "1234.50" usa ponto decimal.
+    Com `,` ou no formulário, "1.500" é ambíguo (1,5 ou 1500?) e é recusado."""
+    so_milhares = MILHARES.fullmatch(texto) is not None
+    if "," in texto:
         texto = texto.replace(".", "").replace(",", ".")
-    elif "," in texto and "." not in texto:
-        texto = texto.replace(",", ".")
+    elif so_milhares:
+        if not virgula_decimal:
+            return None
+        texto = texto.replace(".", "")
     try:
         valor = float(texto)
     except ValueError:
@@ -63,8 +71,9 @@ def validar(df: pd.DataFrame) -> pd.DataFrame:
     """Converte e confere cada linha. Os erros indicam a linha do ficheiro (o cabeçalho é a linha 1)."""
     virgula = df.attrs.get("virgula_decimal", False)
     linhas = []
+    inteiro = pd.api.types.is_integer_dtype(df.index)
     for i, linha in enumerate(df.astype(str).to_dict("records")):
-        n = i + 2
+        n = (int(df.index[i]) if inteiro else i) + 2  # linha no ficheiro, mesmo depois de tirar as vazias
         for coluna in COLUNAS:
             if not linha[coluna].strip():
                 raise ValueError(f"Linha {n}: o campo {coluna} está vazio")
@@ -74,7 +83,7 @@ def validar(df: pd.DataFrame) -> pd.DataFrame:
                              "use aaaa-mm-dd hh:mm ou dd/mm/aaaa hh:mm")
         valor = _valor(linha["valor"].strip(), virgula)
         if valor is None:
-            raise ValueError(f"Linha {n}: valor inválido ('{linha['valor']}'); use um número maior que zero")
+            raise ValueError(f"Linha {n}: valor inválido ('{linha['valor']}'); use um número maior que zero, como 1500 ou 1500,50")
         linhas.append(linha | {"data_hora": quando, "valor": valor,
                                "id_transacao": linha.get("id_transacao", "").strip() or f"L{i + 1}"})
     resultado = pd.DataFrame(linhas, columns=["id_transacao", *COLUNAS])
