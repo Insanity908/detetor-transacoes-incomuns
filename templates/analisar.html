@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block conteudo %}
+<h1>Analisar ficheiro</h1>
+<p class="ajuda">Envie um CSV com as colunas <code>cliente, data_hora, valor, cidade, pais, categoria</code>
+  (<code>id_transacao</code> é opcional), até 5 MB. Ficheiros do Excel em português, com <code>;</code> e vírgula decimal, também são aceites.
+  O histórico de cada cliente vem dos dados de treino e das linhas anteriores do próprio ficheiro.</p>
+<form method="post" action="/analisar" enctype="multipart/form-data" class="envio">
+  <label>Ficheiro CSV <input type="file" name="ficheiro" accept=".csv,text/csv" required></label>
+  <button type="submit" class="principal">Analisar</button>
+</form>
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+{% if chave %}
+<div class="resumo">
+  <p><strong>{{ total }}</strong> transações analisadas, <strong>{{ alertas }}</strong> com alerta (alto risco ou atenção).</p>
+  <p class="acoes">
+    {% if so_alertas %}<a href="/analisar/{{ chave }}">Mostrar todas</a>{% else %}<a href="/analisar/{{ chave }}?alertas=1">Mostrar só os alertas</a>{% endif %}
+    <a href="/analisar/{{ chave }}.csv" class="botao">Baixar resultado em CSV</a>
+  </p>
+  {% if linhas | length == limite %}<p class="ajuda">A tabela mostra as {{ limite }} de maior risco; o download tem todas.</p>{% endif %}
+</div>
+<div class="rolagem"><table>
+  <thead><tr><th class="num">Risco</th><th class="num">Anomalia</th><th>Nível</th><th>Transação</th><th>Cliente</th>
+    <th>Data e hora</th><th class="num">Valor</th><th>Cidade</th><th>País</th><th>Categoria</th><th>Motivos</th></tr></thead>
+  <tbody>
+  {% for l in linhas %}
+    <tr data-risco="{{ l.risco | round | int }}">
+      <td class="num">{{ l.risco | decimal(0) }}</td><td class="num">{{ l.anomalia | decimal(0) }}</td>
+      <td><span class="etiqueta nivel-{{ classe_nivel[l.nivel] }}">{{ l.nivel }}</span></td>
+      <td>{{ l.id_transacao }}</td><td>{{ l.cliente }}</td><td>{{ l.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td class="num">{{ l.valor | mt }}</td><td>{{ l.cidade }}</td><td>{{ l.pais }}</td><td>{{ l.categoria | categoria }}</td>
+      <td>{{ l.motivos | join('; ') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="11" class="ajuda">Nenhuma transação com alerta.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+{% endblock %}

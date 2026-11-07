@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block conteudo %}
+<h1>Perfil do cliente</h1>
+<form method="get" action="/perfil" class="envio">
+  <label>Cliente
+    <input name="cliente" list="lista-clientes" value="{{ codigo }}" required autocomplete="off" placeholder="C0001">
+  </label>
+  <button type="submit" class="principal">Ver perfil</button>
+</form>
+<datalist id="lista-clientes">{% for c in clientes %}<option value="{{ c }}">{% endfor %}</datalist>
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+{% if not codigo %}
+<p class="ajuda">Escolha um cliente para ver o comportamento habitual dele e as transações que os modelos marcaram.</p>
+{% elif perfil %}
+<div class="colunas">
+  <section aria-labelledby="titulo-normal">
+    <h2 id="titulo-normal">O normal de {{ codigo }}</h2>
+    <dl class="ficha">
+      <div><dt>Compras legítimas</dt><dd>{{ perfil.n_compras }}</dd></div>
+      <div><dt>Por dia</dt><dd>{{ perfil.compras_por_dia | decimal }}</dd></div>
+      <div><dt>Valor típico</dt><dd>{{ perfil.valor_mediana | mt }}</dd></div>
+      <div><dt>Faixa habitual</dt><dd>{{ perfil.valor_p10 | mt }} a {{ perfil.valor_p90 | mt }}</dd></div>
+    </dl>
+    <h3>Compras por hora do dia</h3>
+    <div class="horas" role="img" aria-label="Compras por hora do dia">
+      {% for n in perfil.horas %}
+      <div class="hora"><span class="barra-hora" style="height: {{ (100 * n / maximo_hora) | round(1) }}%"></span>
+        <small>{{ loop.index0 }}</small></div>
+      {% endfor %}
+    </div>
+    <h3>Onde e em quê</h3>
+    <dl class="ficha">
+      <div><dt>Cidades</dt><dd>{% for c, n in perfil.cidades.items() %}{{ c | title }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</dd></div>
+      <div><dt>Países</dt><dd>{% for c, n in perfil.paises.items() %}{{ c }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</dd></div>
+      <div><dt>Categorias</dt><dd>{% for c, n in perfil.categorias.items() %}{{ c | categoria }} ({{ n }}){% if not loop.last %}, {% endif %}{% endfor %}</dd></div>
+    </dl>
+  </section>
+  <section aria-labelledby="titulo-marcadas">
+    <h2 id="titulo-marcadas">Transações marcadas no período de teste</h2>
+    {% if marcadas %}
+    <ul class="marcadas">
+      {% for m in marcadas %}
+      <li class="leitura nivel-{{ classe_nivel[m.nivel] }}">
+        <p><span class="etiqueta nivel-{{ classe_nivel[m.nivel] }}">{{ m.nivel }}</span>
+          {{ m.data_hora.strftime('%d/%m/%Y %H:%M') }} · {{ m.valor | mt }} · {{ m.cidade | title }} · {{ m.pais }} · {{ m.categoria | categoria }}</p>
+        <p class="ajuda">Risco {{ m.risco | decimal(0) }} · Anomalia {{ m.anomalia | decimal(0) }} ·
+          Rótulo do gerador: {{ "fraude (" ~ m.tipo_fraude ~ ")" if m.fraude else "legítima" }}</p>
+        {% if m.motivos %}<ul class="motivos">{% for t in m.motivos %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="ajuda">Nenhuma transação deste cliente foi marcada no período de teste.</p>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Modelos</h1>
+{% if not res %}
+<p class="ajuda">Os resultados da avaliação ainda não existem. Execute <code>python treinar.py</code> para os gerar.</p>
+{% else %}
+{% set esc = res.escolhido %}
+<p class="ajuda">Três classificadores supervisionados e um detetor de anomalias, treinados com dados de {{ res.dados.clientes }} clientes.
+  Métricas da classe fraude: a acurácia engana, porque com cerca de 1% de fraudes dizer "legítima" para tudo já dá 99% de acurácia.</p>
+
+<h2>Modelo escolhido</h2>
+<p><strong>{{ nomes[esc] }}.</strong> {{ res.motivo_escolha }} O limiar e o modelo vêm só da validação; o teste só mede.</p>
+{% if res.aviso_gerador_facil %}<p class="erro">O F1 no teste passou de 0,98: o gerador provavelmente ficou fácil demais.</p>{% endif %}
+
+<div class="rolagem"><table>
+  <thead><tr><th>Modelo</th><th>Período</th><th class="num">Precisão</th><th class="num">Recall</th><th class="num">F1</th>
+    <th class="num">PR AUC</th><th class="num">Acurácia</th></tr></thead>
+  <tbody>
+  {% for nome in ordem %}{% for periodo in ("validacao", "teste") %}
+    {% set m = res.modelos[nome][periodo] %}
+    <tr{% if nome == esc %} class="destaque"{% endif %}><td>{{ nomes[nome] }}</td><td>{{ periodos[periodo] }}</td>
+      <td class="num">{{ m.precisao | pct }}</td><td class="num">{{ m.recall | pct }}</td>
+      <td class="num">{{ m.f1 | decimal(3) }}</td><td class="num">{{ "—" if m.pr_auc is none else (m.pr_auc | decimal(3)) }}</td>
+      <td class="num">{{ m.acuracia | pct }}</td></tr>
+  {% endfor %}{% endfor %}
+  </tbody>
+</table></div>
+
+<div class="graficos">
+  <figure><img src="/graficos/comparacao.png" alt="F1 por modelo na validação e no teste"><figcaption>F1 por modelo</figcaption></figure>
+  <figure><img src="/graficos/matriz_confusao.png" alt="Matriz de confusão do modelo escolhido no teste"><figcaption>Matriz de confusão no teste</figcaption></figure>
+</div>
+
+<h2>Recall por tipo de fraude (teste)</h2>
+<div class="rolagem"><table>
+  <thead><tr><th>Tipo</th><th class="num">{{ nomes[esc] }}</th><th class="num">Isolation Forest</th></tr></thead>
+  <tbody>
+  {% for tipo, nome in tipos.items() %}
+    <tr><td>{{ nome }}</td><td class="num">{{ res.recall_por_tipo.escolhido.get(tipo) | pct }}</td>
+      <td class="num">{{ res.recall_por_tipo.isolation_forest.get(tipo) | pct }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="ajuda">O Isolation Forest foi treinado sem rótulos. No teste, apanhou {{ res.ganho_isolation }} fraudes que o classificador deixou passar;
+  essas transações aparecem com o nível "Atenção".</p>
+
+<h2>Importância das features</h2>
+<figure><img src="/graficos/importancia.png" alt="Importância das features por permutação"><figcaption>Calculada por permutação na validação</figcaption></figure>
+
+<h2>Divisão aleatória contra divisão por tempo</h2>
+<div class="rolagem"><table class="estreita">
+  <thead><tr><th>Divisão</th><th class="num">F1 no teste</th></tr></thead>
+  <tbody>
+    <tr><td>Por tempo (usada no sistema)</td><td class="num">{{ res.divisao_aleatoria.f1_tempo | decimal(3) }}</td></tr>
+    <tr><td>Aleatória 80/20, como nas aulas</td><td class="num">{{ res.divisao_aleatoria.f1_aleatoria | decimal(3) }}</td></tr>
+  </tbody>
+</table></div>
+<p class="ajuda">A divisão por tempo corresponde ao uso real: treinar com o passado e avaliar o futuro.</p>
+{% endif %}
+{% endblock %}

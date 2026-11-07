@@ -33,3 +33,18 @@ def pasta_pequena(artefatos_pequenos, tmp_path_factory):
 def cliente(pasta_pequena):
     from app import criar_app
     return criar_app(pasta_pequena).test_client()
+
+
+@pytest.fixture(scope="session")
+def pasta_treinada(tmp_path_factory):
+    """Treino completo com 120 clientes: tem resultados, gráficos e transações de teste avaliadas."""
+    from treinar import executar
+    raiz = tmp_path_factory.mktemp("treinada")
+    executar(raiz / "modelos", raiz / "data", None, n_clientes=120)
+    return raiz / "modelos"
+
+
+@pytest.fixture()
+def cliente_treinado(pasta_treinada):
+    from app import criar_app
+    return criar_app(pasta_treinada).test_client()
