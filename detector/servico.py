@@ -14,7 +14,12 @@ def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame) -> pd.Dat
     if "id_transacao" in historico.columns:  # uma transação já guardada não pode ser o próprio passado
         historico = historico[~historico["id_transacao"].isin(transacoes["id_transacao"])]
     features = calcular_features(transacoes, historico=historico)
-    avaliacao = artefatos.detector.avaliar(features)
+    return montar_resultado(transacoes, features, artefatos.detector.avaliar(features), historico)
+
+
+def montar_resultado(transacoes: pd.DataFrame, features: pd.DataFrame, avaliacao: pd.DataFrame,
+                     historico: pd.DataFrame) -> pd.DataFrame:
+    """Junta transações, avaliação e motivos; os perfis vêm das compras legítimas do histórico."""
     normalizadas = normalizar(transacoes)
     hist_normalizado = normalizar(historico)
     por_cliente = {c: g for c, g in hist_normalizado.groupby("cliente")}

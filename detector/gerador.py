@@ -18,6 +18,8 @@ CATEGORIAS = ("MERCEARIA", "COMBUSTIVEL", "RESTAURANTE", "FARMACIA", "RECARGA_TE
               "VESTUARIO", "ELETRONICA", "VIAGEM")
 PESO_CATEGORIAS = (0.2, 0.12, 0.12, 0.1, 0.16, 0.12, 0.08, 0.05, 0.05)
 TIPOS_FRAUDE = ("valor_alto", "pais_estranho", "horario_estranho", "rajada", "conta_tomada")
+NOMES_TIPO_FRAUDE = {"valor_alto": "Valor alto", "pais_estranho": "País estranho", "horario_estranho": "Horário estranho",
+                     "rajada": "Rajada", "conta_tomada": "Conta tomada"}
 PAISES_ESTRANHOS = ("NG", "AE", "CN", "BR", "IN", "ZW", "MW", "TZ")
 EVENTOS_POR_TRANSACAO = 0.0053  # com a rajada valendo várias compras, dá cerca de 1% de fraudes
 

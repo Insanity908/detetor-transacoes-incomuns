@@ -17,12 +17,18 @@ ORDEM_SIMPLICIDADE = ("regressao_logistica", "random_forest", "gradient_boosting
 MARGEM_EMPATE = 0.02
 FRACAO_ANOMALIAS = 0.02
 NIVEIS = ("Alto risco", "Atenção", "Normal")
+NOMES = {
+    "regressao_logistica": "Regressão logística",
+    "random_forest": "Random Forest",
+    "gradient_boosting": "Gradient Boosting (HistGradientBoosting)",
+    "isolation_forest": "Isolation Forest",
+}
 
 
 def criar_classificadores() -> dict[str, Pipeline]:
     modelos = {
         "regressao_logistica": LogisticRegression(max_iter=1000, random_state=42),
-        "random_forest": RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1),
+        "random_forest": RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1),
         "gradient_boosting": HistGradientBoostingClassifier(random_state=42),
     }
     return {nome: Pipeline([("escala", StandardScaler()), ("modelo", m)]) for nome, m in modelos.items()}

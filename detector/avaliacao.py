@@ -10,6 +10,7 @@ from .gerador import INICIO
 
 DIAS_AQUECIMENTO = 30
 FRACAO_TREINO, FRACAO_VALIDACAO = 0.64, 0.16
+NOMES_PERIODO = {"aquecimento": "Aquecimento", "treino": "Treino", "validacao": "Validação", "teste": "Teste"}
 
 
 def dividir_periodos(datas: pd.Series, inicio: str = INICIO) -> dict[str, np.ndarray]:
