@@ -12,10 +12,11 @@ def test_sem_modelos_mostra_a_instrucao(tmp_path):
     assert r.status_code == 503 and "python treinar.py" in r.get_data(as_text=True)
 
 
-def test_pagina_inicial_tem_as_abas_e_o_aviso(cliente):
+def test_pagina_inicial_tem_as_abas_sem_aviso_nem_ucm(cliente):
     html = cliente.get("/").get_data(as_text=True)
-    for t in ("Testar transação", "Analisar ficheiro", "Perfil do cliente", "Modelos", "Dados sintéticos"):
+    for t in ("Testar transação", "Analisar ficheiro", "Perfil do cliente", "Modelos"):
         assert t in html
+    assert "Dados sintéticos" not in html and "UCM" not in html
 
 
 def test_exemplos_usam_um_cliente_com_historico(artefatos_pequenos):

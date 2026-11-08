@@ -10,8 +10,6 @@
   --alto: #b3261e;
   --atencao: #8a5a00;
   --normal: #2e7d4f;
-  --aviso-fundo: #fff4d6;
-  --aviso-texto: #5c4300;
   --fonte: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -25,7 +23,6 @@ nav { display: flex; flex-wrap: wrap; gap: .25rem; }
 nav a { color: #dfe7ee; text-decoration: none; padding: .35rem .7rem; border-radius: 3px; }
 nav a:hover { background: rgba(255,255,255,.1); }
 nav a[aria-current="page"] { background: #fff; color: var(--tinta); font-weight: 600; }
-.aviso { margin: 0; background: var(--aviso-fundo); color: var(--aviso-texto); padding: .5rem 0; font-size: .92rem; }
 main { padding-block: 2rem 4rem; }
 h1 { font-size: 1.6rem; margin: 0 0 .4rem; }
 h2 { font-size: 1.25rem; margin: 0 0 .75rem; }
