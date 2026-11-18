@@ -29,7 +29,7 @@ extrato e o que pode fazer:
 
 - **Depósito**: o valor entra logo na conta. Cada formulário só envia uma vez, mesmo com cliques repetidos.
 - **Levantamento**: o detetor avalia o pedido **antes** de o dinheiro sair. Se for autorizado, entregue o dinheiro.
-  Se aparecer o aviso **Em verificação**, **não entregue o dinheiro**: a equipa de fraude decide. Sem saldo
+  Se aparecer o aviso **Em verificação**, **não entregue o dinheiro**: a equipa de fraude decide, e mesmo que conclua que foi um falso alarme o levantamento é cancelado e o cliente tem de repetir o pedido ao balcão. Sem saldo
   disponível, ou com risco muito alto, o levantamento é recusado.
 - **Bloquear conta**: a conta bloqueada não recebe nem envia dinheiro, e o cliente deixa de entrar.
 - **Acesso do cliente**: crie ou redefina a senha temporária; o cliente muda-a na primeira entrada.
@@ -76,7 +76,7 @@ Os alertas chegam de duas fontes: os ficheiros analisados e as transações envi
    **perfil do cliente** (valor habitual, horários, cidades, países e categorias). Registe o que verificou em
    **Comentários**; tudo fica no **histórico** do alerta.
 4. **Decidir.** Se o alerta vem de uma saída de dinheiro do banco (compra, levantamento ou transferência), o valor
-   está retido até decidir: **Falso alarme** executa o movimento e **Fraude confirmada** cancela-o e repõe o saldo
+   está retido até decidir: **Falso alarme** executa o movimento (exceto num levantamento, que é cancelado com a nota "Levantamento não entregue: o cliente deve repetir o pedido ao balcão.", porque o balcão não entregou o dinheiro) e **Fraude confirmada** cancela-o e repõe o saldo
    disponível. Reabrir um alerta não volta a mexer no dinheiro. Escolha **Fraude confirmada** ou **Falso alarme**, escreva a justificação (obrigatória) e clique
    **Encerrar alerta**. Se não for consigo, use **Devolver à fila**.
 

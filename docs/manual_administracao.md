@@ -102,7 +102,7 @@ treino.
 | `--cenario novo_tipo` | Mudança de comportamento: `novo_tipo` (fraude fracionada, que o modelo não conhece), `habitos` (compras seis horas mais tarde e em categorias novas) ou `valores` (inflação de 2,5 vezes). |
 | `--duracao 300` | Pára ao fim de 300 segundos reais. |
 
-No dia 25 de cada mês simulado, às 08:00, cada cliente recebe o salário por depósito. A linha "recusadas por saldo · retidas" mostra o que o banco recusou e reteve, e `--tipos` aceita também `conta_esvaziada`. O simulador precisa dos clientes sintéticos (`gerir.py preparar`).
+No dia 25 de cada mês simulado, às 08:00, cada cliente recebe o salário por depósito. A linha "recusadas por saldo · retidas" mostra o que o banco recusou e reteve, e `--tipos` aceita também `conta_esvaziada` (uma única transferência de 15 a 40 vezes o valor habitual do cliente). O simulador precisa dos clientes sintéticos (`gerir.py preparar`).
 
 O simulador mostra periodicamente quantas fraudes injetou e quantas o sistema apanhou. Envia também o que o
 gerador marcou como fraude: serve de rótulo à monitorização e ao re-treino, mas nunca aparece aos analistas.
