@@ -67,7 +67,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 
 # Fase 7 — Clientes, contas e balcão
 
-### Tarefa 1: Tabelas do banco (migração 0006 e ORM)
+### Task 1: Tabelas do banco (migração 0006 e ORM)
 
 **Ficheiros:**
 - Criar: `migracoes/versions/0006_banco.py`
@@ -103,7 +103,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 - [ ] **Passo 4:** `.venv\Scripts\python -m pytest -q` → tudo passa.
 - [ ] **Passo 5:** commit `"Fase 7: tabelas de clientes, contas e movimentos"`.
 
-### Tarefa 2: Perfil Balcão e permissões por área
+### Task 2: Perfil Balcão e permissões por área
 
 **Ficheiros:**
 - Modificar: `detector/banco.py`, `detector/acesso.py`, `detector/contas.py` (`NOMES_PERFIL`), `templates/base.html`,
@@ -146,7 +146,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 - [ ] **Passo 4:** `.venv\Scripts\python -m pytest -q` → tudo passa (os perfis antigos não mudam de acesso).
 - [ ] **Passo 5:** commit.
 
-### Tarefa 3: Dinheiro, fichas de clientes e contas
+### Task 3: Dinheiro, fichas de clientes e contas
 
 **Ficheiros:**
 - Criar: `detector/dinheiro.py`, `detector/clientes.py`, `detector/contas_bancarias.py`
@@ -187,7 +187,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 - [ ] **Passo 4:** `.venv\Scripts\python -m pytest tests/test_banco_contas.py -q` → PASS.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 4: Clientes sintéticos e comandos de gestão
+### Task 4: Clientes sintéticos e comandos de gestão
 
 **Ficheiros:**
 - Modificar: `detector/clientes.py`, `gerir.py`
@@ -211,7 +211,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 - [ ] **Passo 4:** `.venv\Scripts\python -m pytest -q` → tudo passa.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 5: Ecrãs do balcão (clientes, ficha, depósito)
+### Task 5: Ecrãs do balcão (clientes, ficha, depósito)
 
 **Ficheiros:**
 - Criar: `detector/web_balcao.py`, `templates/balcao_clientes.html`, `templates/balcao_cliente_novo.html`,
@@ -238,7 +238,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
 
 # Fase 8 — Autorização antes do movimento
 
-### Tarefa 6: Gerador com transferências, levantamentos e "conta esvaziada"
+### Task 6: Gerador com transferências, levantamentos e "conta esvaziada"
 
 **Ficheiros:**
 - Modificar: `detector/gerador.py`, `detector/explicacao.py`, `detector/simulacao.py` (`TRANSACOES_POR_EVENTO`
@@ -268,7 +268,7 @@ as secções citadas (ex.: "design 5.3") têm o porquê.
   ou `test_treinar.py` cair, ajustar os parâmetros do gerador (não os limiares dos testes) até voltarem a passar.
 - [ ] **Passo 5:** commit. Nota para a instalação: `gerir.py treinar --forcar` re-treina com os dados novos.
 
-### Tarefa 7: Corte de recusa automática
+### Task 7: Corte de recusa automática
 
 **Ficheiros:** Modificar `detector/limiares.py`, `detector/web_modelos.py` (rota dos limiares),
 `templates/limiares.html`, `detector/banco.py`/`alertas.py` (`NOMES_ESTADO["recusado_auto"] = "Recusado
@@ -283,7 +283,7 @@ automaticamente"`). Teste: `tests/test_ciclo_modelo.py`.
 - [ ] **Passo 2–4:** FAIL → implementar → `.venv\Scripts\python -m pytest -q` passa.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 8: Débito, reserva e liquidação nas contas
+### Task 8: Débito, reserva e liquidação nas contas
 
 **Ficheiros:** Modificar `detector/contas_bancarias.py`. Teste: `tests/test_banco_contas.py`.
 
@@ -307,7 +307,7 @@ automaticamente"`). Teste: `tests/test_ciclo_modelo.py`.
 - [ ] **Passo 2–4:** FAIL → implementar → PASS.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 9: `autorizar()`
+### Task 9: `autorizar()`
 
 **Ficheiros:**
 - Criar: `detector/autorizacao.py`
@@ -377,7 +377,7 @@ Algoritmo (design 5.3; único bloco que o construtor não deduz sozinho):
   `guardar_analise` não pode partir os testes da API e da análise).
 - [ ] **Passo 5:** commit.
 
-### Tarefa 10: Decisão do analista liquida o movimento
+### Task 10: Decisão do analista liquida o movimento
 
 **Ficheiros:** Modificar `detector/alertas.py` (`decidir`), `detector/web_alertas.py`, `templates/alerta.html`.
 Teste: `tests/test_alertas.py`.
@@ -395,7 +395,7 @@ botão "Reabrir" vem acompanhado de "Reabrir não devolve nem volta a reter o di
 - [ ] **Passo 2–4:** FAIL → implementar → PASS.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 11: Levantamento ao balcão
+### Task 11: Levantamento ao balcão
 
 **Ficheiros:** Modificar `detector/web_balcao.py`, `templates/balcao_cliente.html`. Teste: `tests/test_balcao.py`.
 
@@ -407,7 +407,7 @@ dinheiro** até a equipa de fraude decidir."; recusado → o motivo. Auditoria `
 - [ ] **Passos 1–5:** testes para as três mensagens (níveis forçados por `monkeypatch`), FAIL → implementar → PASS →
   commit.
 
-### Tarefa 12: API — débitos e depósitos
+### Task 12: API — débitos e depósitos
 
 **Ficheiros:** Modificar `detector/api.py`, `detector/openapi.py`. Teste: `tests/test_api.py`.
 
@@ -428,7 +428,7 @@ dinheiro** até a equipa de fraude decidir."; recusado → o motivo. Auditoria `
 - [ ] **Passo 2–4:** FAIL → implementar → `.venv\Scripts\python -m pytest -q` passa.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 13: Simulador com salário e contadores
+### Task 13: Simulador com salário e contadores
 
 **Ficheiros:** Modificar `detector/simulacao.py`, `simulador.py`. Teste: `tests/test_api.py` ou ficheiro de testes
 do simulador existente (procurar `Estatisticas` em `tests/`).
@@ -444,7 +444,7 @@ do simulador existente (procurar `Estatisticas` em `tests/`).
 - [ ] **Passos 1–5:** testes com o transporte falso já usado nos testes do simulador (salário no dia 25, uma vez
   por cliente e por mês; contadores); FAIL → implementar → PASS → commit.
 
-### Tarefa 14: Painel — valor retido e valor protegido
+### Task 14: Painel — valor retido e valor protegido
 
 **Ficheiros:** Modificar `detector/alertas.py` (`Indicadores`, `indicadores`), `templates/painel.html`.
 Teste: `tests/test_alertas.py`.
@@ -460,7 +460,7 @@ atuais.
 
 # Fase 9 — Área do cliente e cena de demonstração
 
-### Tarefa 15: Acesso do cliente
+### Task 15: Acesso do cliente
 
 **Ficheiros:**
 - Criar: `detector/acesso_cliente.py`, `templates/base_cliente.html`, `templates/cliente_entrar.html`,
@@ -492,7 +492,7 @@ atuais.
 - [ ] **Passo 2–4:** FAIL → implementar → `.venv\Scripts\python -m pytest -q` passa.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 16: Saldo, movimentos e transferências do cliente
+### Task 16: Saldo, movimentos e transferências do cliente
 
 **Ficheiros:**
 - Criar: `detector/web_cliente.py`, `templates/cliente_inicio.html`, `templates/cliente_transferir.html`,
@@ -517,7 +517,7 @@ atuais.
 - [ ] **Passo 2–4:** FAIL → implementar → PASS.
 - [ ] **Passo 5:** commit.
 
-### Tarefa 17: Documentação e guião da demonstração
+### Task 17: Documentação e guião da demonstração
 
 **Ficheiros:** Modificar `docs/manual_utilizador.md` (Balcão; área do cliente), `docs/manual_administracao.md`
 (perfil Balcão, `MODO_DEMONSTRACAO`, `verificar-saldos`, re-treino com as categorias novas, corte de recusa,
