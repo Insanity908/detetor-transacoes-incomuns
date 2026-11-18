@@ -528,3 +528,37 @@ def test_ficha_mostra_conta_titular_saldo_e_movimento(app, artefatos_pequenos, m
     _acao(sup, i, "decidir", decisao="fraude", texto="Cliente confirmou a fraude.")
     pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
     assert "Cancelado" in pagina and "Fraude confirmada." in pagina
+
+
+def test_indicadores_valor_retido_e_protegido(app):
+    from detector import clientes
+    from detector.autorizacao import MOTIVO_RISCO
+    from detector.banco import Movimento
+    from detector.clientes import DadosCliente
+    sessoes = _sessoes(app)
+    c = clientes.criar(sessoes, DadosCliente("Rui Teste", date(1990, 1, 1), "BI", "123456789A", "840000000",
+                                             "", "MAPUTO", "Rua 1"), "teste")
+    hoje = date(2026, 5, 10)
+    dentro, fora = datetime(2026, 5, 9, 10, 0), datetime(2026, 1, 1, 10, 0)
+
+    def mov(estado, valor, momento, motivo=None):
+        return Movimento(conta_id=c.conta.id, tipo="levantamento", valor=valor, estado=estado, motivo=motivo,
+                         canal="balcao", momento=momento, registado_em=momento, criado_por="teste")
+    with sessoes.begin() as s:
+        s.add_all([mov("retido", 30000, fora),  # retido conta sempre, sem filtro de período
+                   mov("retido", 20000, dentro),
+                   mov("cancelado", 50000, dentro, "Fraude confirmada."),
+                   mov("cancelado", 7000, dentro, "Outro motivo."),
+                   mov("recusado", 90000, dentro, MOTIVO_RISCO),
+                   mov("recusado", 4000, dentro, "Saldo insuficiente."),
+                   mov("cancelado", 60000, fora, "Fraude confirmada."),  # fora do período
+                   mov("autorizado", 1000, dentro)])
+    ind = alertas.indicadores(sessoes, 7, hoje=hoje)
+    assert ind.valor_retido == 50000 and ind.valor_protegido == 140000
+    assert isinstance(ind.valor_retido, int) and isinstance(ind.valor_protegido, int)
+    assert alertas.indicadores(sessoes, 7, hoje=date(2026, 6, 30)).valor_protegido == 0
+
+
+def test_painel_mostra_cartoes_retido_e_protegido(app):
+    html = criar_cliente(app, "supervisor").get("/painel").get_data(as_text=True)
+    assert "Valor retido" in html and "Valor protegido" in html and "0,00 MT" in html

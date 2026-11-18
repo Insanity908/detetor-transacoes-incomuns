@@ -12,6 +12,9 @@ TIPOS_ENTRADA = ("deposito", "transferencia_recebida")
 ESTADOS_DEBITO = ("autorizado", "retido", "recusado")
 
 
+MOTIVO_FRAUDE = "Fraude confirmada."  # motivo dos retidos cancelados pela equipa de fraude
+
+
 def _agora() -> datetime:
     return datetime.now().replace(microsecond=0)
 
@@ -111,7 +114,7 @@ def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimen
     s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)
               .values(saldo_retido=ContaBancaria.saldo_retido - valor))
     if not executar:
-        movimento.motivo = "Fraude confirmada."
+        movimento.motivo = MOTIVO_FRAUDE
     else:
         origem_estado = s.execute(select(ContaBancaria.estado).where(ContaBancaria.id == movimento.conta_id)
                                   .execution_options(populate_existing=True)).scalar_one()

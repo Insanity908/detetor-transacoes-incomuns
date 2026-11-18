@@ -27,6 +27,16 @@
     <p class="numero">{{ ind.horas_decisao | horas }}</p>
     <p class="nota">{% if ind.horas_decisao_mediana is not none %}mediana {{ ind.horas_decisao_mediana | horas }}{% else %}nenhuma decisão no período{% endif %}</p>
   </div>
+  <div class="indicador">
+    <p class="rotulo">Valor retido</p>
+    <p class="numero">{{ ind.valor_retido | mtc }}</p>
+    <p class="nota">em levantamentos e transferências à espera de decisão, agora</p>
+  </div>
+  <div class="indicador">
+    <p class="rotulo">Valor protegido</p>
+    <p class="numero">{{ ind.valor_protegido | mtc }}</p>
+    <p class="nota">cancelado por fraude ou recusado por risco, no período</p>
+  </div>
 </div>
 <p class="ajuda">Fraude confirmada no período: <strong>{{ ind.fraudes }}</strong> alerta(s), {{ ind.valor_fraude | mt }}.</p>
 
