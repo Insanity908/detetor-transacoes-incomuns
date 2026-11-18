@@ -18,16 +18,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import repositorio
 from .alertas import criar_para_analise
 from .banco import CANAIS_MOVIMENTO, Alerta, ContaBancaria, Movimento, TransacaoAvaliada
-from .contas_bancarias import debitar
+from .contas_bancarias import (MOTIVO_CONTA_BLOQUEADA, MOTIVO_DESTINO_BLOQUEADO, MOTIVO_INVALIDO, MOTIVO_RISCO,
+                               MOTIVO_SALDO, debitar)
 from .servico import avaliar_transacoes
 
 registo = logging.getLogger("detetor")
 
 DIAS_HISTORICO = 90
 TIPOS_SAIDA = ("compra", "transferencia_enviada", "levantamento")
-MOTIVO_SALDO = "Saldo insuficiente."
-MOTIVO_INVALIDO = "Pedido inválido."
-MOTIVO_RISCO = "Risco muito alto: recusado automaticamente."
 
 
 @dataclass(frozen=True)
@@ -66,7 +64,7 @@ def _invalido(s: Session, p: PedidoDebito) -> str | None:
     if conta is None:
         return "Conta não encontrada."
     if conta.estado == "bloqueada":
-        return "A conta está bloqueada."
+        return MOTIVO_CONTA_BLOQUEADA
     if p.tipo == "transferencia_enviada" and p.contraparte_id is not None:  # sem contraparte: saída para fora
         if p.contraparte_id == p.conta_id:
             return "A conta de destino não pode ser a própria conta."
@@ -74,7 +72,7 @@ def _invalido(s: Session, p: PedidoDebito) -> str | None:
         if destino is None:
             return "Conta de destino não encontrada."
         if destino.estado == "bloqueada":
-            return "A conta de destino está bloqueada."
+            return MOTIVO_DESTINO_BLOQUEADO
     return None
 
 

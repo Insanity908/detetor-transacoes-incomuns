@@ -11,13 +11,12 @@ from . import acesso, clientes, contas_bancarias
 from .autorizacao import PedidoDebito, autorizar
 from .banco import ContaBancaria, Movimento
 from .dinheiro import para_centavos
+from .contas_bancarias import NOMES_TIPO
 from .gerador import CATEGORIA_TRANSFERENCIA, CIDADES, PAIS_HABITUAL, PAISES_ESTRANHOS
 
 ENDPOINTS = frozenset({"cliente_inicio", "cliente_movimento", "cliente_transferir", "cliente_transferir_post"})
 ULTIMOS = 50
 PAISES = (PAIS_HABITUAL, *PAISES_ESTRANHOS)
-NOMES_TIPO = {"deposito": "Depósito", "levantamento": "Levantamento", "compra": "Compra",
-              "transferencia_enviada": "Transferência enviada", "transferencia_recebida": "Transferência recebida"}
 ESTADOS = {"autorizado": "Concluída", "retido": "Em verificação", "cancelado": "Cancelada"}
 SEM_DESTINO = -1  # id que nunca existe: o detetor recusa com "Conta de destino não encontrada."
 

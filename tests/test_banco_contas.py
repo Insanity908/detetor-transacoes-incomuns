@@ -203,12 +203,12 @@ def test_reserva_reduz_o_disponivel(sessoes):
 
 def test_liquidar_executando_e_nao_executando(sessoes):
     cid = _conta_com(sessoes, 10000)
-    m = _debitar(sessoes, cid, 3000, "retido")
+    m = _debitar(sessoes, cid, 3000, "retido", tipo="compra")
     with sessoes.begin() as s:
         r = contas_bancarias.liquidar(s, m.id, True, "analista")
         assert r.estado == "autorizado" and r.saldo_apos == 7000
     assert _conta(sessoes, cid) == (7000, 0)
-    m = _debitar(sessoes, cid, 2000, "retido")
+    m = _debitar(sessoes, cid, 2000, "retido", tipo="compra")
     with sessoes.begin() as s:
         r = contas_bancarias.liquidar(s, m.id, False, "analista")
         assert r.estado == "cancelado" and r.motivo == "Fraude confirmada."
@@ -216,6 +216,16 @@ def test_liquidar_executando_e_nao_executando(sessoes):
     with pytest.raises(ValueError):
         with sessoes.begin() as s:
             contas_bancarias.liquidar(s, m.id, True, "analista")
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_liquidar_levantamento_retido_nunca_executa(sessoes):
+    cid = _conta_com(sessoes, 10000)
+    m = _debitar(sessoes, cid, 3000, "retido")  # levantamento
+    with sessoes.begin() as s:
+        r = contas_bancarias.liquidar(s, m.id, True, "analista")
+        assert (r.estado, r.motivo) == ("cancelado", contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE)
+    assert _conta(sessoes, cid) == (10000, 0)
     assert contas_bancarias.verificar_saldos(sessoes) == []
 
 

@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-from . import gerador
+from . import contas_bancarias, gerador
 from .gerador import CATEGORIA_TRANSFERENCIA, CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
 
 DESVIO_HORA = 2.5  # como gerador._hora
@@ -236,7 +236,7 @@ class Estatisticas:
             return
         self.enviadas += 1
         movimento = resultado.get("movimento") or {}
-        if movimento.get("estado") == "recusado" and movimento.get("motivo") == "Saldo insuficiente.":
+        if movimento.get("estado") == "recusado" and movimento.get("motivo") == contas_bancarias.MOTIVO_SALDO:
             self.recusadas_saldo += 1
         elif movimento.get("estado") == "retido":
             self.retidas += 1

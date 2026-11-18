@@ -12,7 +12,20 @@ TIPOS_ENTRADA = ("deposito", "transferencia_recebida")
 ESTADOS_DEBITO = ("autorizado", "retido", "recusado")
 
 
+# Motivos de recusa e de cancelamento (textos expostos à API e aos clientes: não mudar sem pensar)
+MOTIVO_SALDO = "Saldo insuficiente."
+MOTIVO_INVALIDO = "Pedido inválido."
+MOTIVO_RISCO = "Risco muito alto: recusado automaticamente."
 MOTIVO_FRAUDE = "Fraude confirmada."  # motivo dos retidos cancelados pela equipa de fraude
+MOTIVO_CONTA_BLOQUEADA = "A conta está bloqueada."
+MOTIVO_DESTINO_BLOQUEADO = "A conta de destino está bloqueada."
+MOTIVO_CREDITO_BLOQUEADO = "A conta está bloqueada e não pode receber dinheiro."
+MOTIVO_BLOQUEADA_ENTRETANTO = "A conta foi bloqueada entretanto."
+MOTIVO_DESTINO_BLOQUEADO_ENTRETANTO = "A conta de destino foi bloqueada entretanto."
+MOTIVO_LEVANTAMENTO_NAO_ENTREGUE = "Levantamento não entregue: o cliente deve repetir o pedido ao balcão."
+
+NOMES_TIPO = {"deposito": "Depósito", "levantamento": "Levantamento", "compra": "Compra",
+              "transferencia_enviada": "Transferência enviada", "transferencia_recebida": "Transferência recebida"}
 
 
 def _agora() -> datetime:
@@ -31,7 +44,7 @@ def creditar(s: Session, conta_id: int, valor: int, tipo: str, canal: str, por: 
     if conta is None:
         raise ValueError("Conta não encontrada.")
     if conta.estado == "bloqueada":
-        raise ValueError("A conta está bloqueada e não pode receber dinheiro.")
+        raise ValueError(MOTIVO_CREDITO_BLOQUEADO)
     s.execute(update(ContaBancaria).where(ContaBancaria.id == conta_id).values(saldo=ContaBancaria.saldo + valor))
     saldo_apos = s.execute(select(ContaBancaria.saldo).where(ContaBancaria.id == conta_id)
                            .execution_options(populate_existing=True)).scalar_one()
@@ -72,9 +85,9 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
     saldo_apos = None
     if estado != "recusado":
         if conta.estado == "bloqueada":
-            estado, motivo = "recusado", "A conta está bloqueada."
+            estado, motivo = "recusado", MOTIVO_CONTA_BLOQUEADA
         elif tipo == "transferencia_enviada" and destino is not None and destino.estado == "bloqueada":
-            estado, motivo = "recusado", "A conta de destino está bloqueada."
+            estado, motivo = "recusado", MOTIVO_DESTINO_BLOQUEADO
     if estado != "recusado":
         if estado == "autorizado":
             valores = {"saldo": ContaBancaria.saldo - valor}
@@ -84,7 +97,7 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
                                                       ContaBancaria.saldo - ContaBancaria.saldo_retido >= valor)
                           .values(**valores)).rowcount
         if not feito:
-            estado, motivo = "recusado", "Saldo insuficiente."
+            estado, motivo = "recusado", MOTIVO_SALDO
         elif estado == "autorizado":
             saldo_apos = _saldo(s, conta.id)
     agora = _agora()
@@ -100,7 +113,9 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
 
 
 def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimento:
-    """Resolve um movimento retido: executa-o (debita e credita o destino) ou cancela-o. Sem commit."""
+    """Resolve um movimento retido: executa-o (debita e credita o destino) ou cancela-o. Sem commit.
+
+    Um levantamento retido nunca se executa: o dinheiro não foi entregue no balcão, por isso cancela-se sempre."""
     # Reclama o movimento de forma atómica: só uma liquidação consegue passar de "retido" a outro estado.
     reclamado = s.execute(update(Movimento).where(Movimento.id == movimento_id, Movimento.estado == "retido")
                           .values(estado="cancelado")).rowcount
@@ -115,14 +130,17 @@ def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimen
               .values(saldo_retido=ContaBancaria.saldo_retido - valor))
     if not executar:
         movimento.motivo = MOTIVO_FRAUDE
+    elif movimento.tipo == "levantamento":
+        # o balcão foi avisado de que não entrega o dinheiro: liberta-se a reserva sem debitar
+        movimento.motivo = MOTIVO_LEVANTAMENTO_NAO_ENTREGUE
     else:
         origem_estado = s.execute(select(ContaBancaria.estado).where(ContaBancaria.id == movimento.conta_id)
                                   .execution_options(populate_existing=True)).scalar_one()
         destino = s.get(ContaBancaria, movimento.contraparte_id) if movimento.contraparte_id else None
         if origem_estado == "bloqueada":
-            movimento.motivo = "A conta foi bloqueada entretanto."
+            movimento.motivo = MOTIVO_BLOQUEADA_ENTRETANTO
         elif movimento.tipo == "transferencia_enviada" and movimento.contraparte_id is not None and (destino is None or destino.estado == "bloqueada"):
-            movimento.motivo = "A conta de destino foi bloqueada entretanto."
+            movimento.motivo = MOTIVO_DESTINO_BLOQUEADO_ENTRETANTO
         else:
             s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)
                       .values(saldo=ContaBancaria.saldo - valor))

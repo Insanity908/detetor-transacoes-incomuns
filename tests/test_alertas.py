@@ -377,7 +377,7 @@ def test_migracao_0003_poe_os_alertas_antigos_na_fila(ambiente_de_teste):
 
 
 # ------------------------------------------------------------ decisão liquida o movimento do banco
-def _retido(app, artefatos, monkeypatch, valor=25000, destino=False):
+def _retido(app, artefatos, monkeypatch, valor=25000, destino=False, tipo=None):
     """Cria uma conta com saldo e um débito retido (alerta novo); devolve (alerta_id, conta_id, destino_id, mov_id)."""
     from detector import autorizacao, clientes, contas_bancarias
     from detector.autorizacao import PedidoDebito
@@ -402,7 +402,7 @@ def _retido(app, artefatos, monkeypatch, valor=25000, destino=False):
         r["historico_curto"] = False
         return r
     monkeypatch.setattr(autorizacao, "avaliar_transacoes", falso)
-    tipo = "transferencia_enviada" if destino else "compra"
+    tipo = tipo or ("transferencia_enviada" if destino else "compra")
     pedido = PedidoDebito(conta_id=origem, tipo=tipo, valor=valor, momento=datetime(2026, 11, 18, 10, 0),
                           cidade="MAPUTO", pais="MZ", categoria="SUPERMERCADO", canal="balcao", por="teste",
                           contraparte_id=alvo if destino else None)
@@ -576,3 +576,16 @@ def test_recusado_auto_aparece_em_encerrados_sem_formulario_de_reabrir(app, arte
     assert alertas.listar(_sessoes(app), sup.utilizador)[1] == 0
     pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
     assert f"/alertas/{i}/reabrir" not in pagina
+
+
+def test_falso_alarme_num_levantamento_retido_cancela_em_vez_de_executar(app, artefatos_pequenos, monkeypatch):
+    """O balcão foi avisado de que não entrega o dinheiro: o falso alarme liberta a reserva mas não debita."""
+    from detector import contas_bancarias
+    i, o, _, m = _retido(app, artefatos_pequenos, monkeypatch, tipo="levantamento")
+    assert _saldos(app, o) == [(100000, 25000)]
+    _supervisor_decide(app, i, "falso_alarme")
+    assert _movimento(app, m) == ("cancelado", contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE)
+    assert contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE ==         "Levantamento não entregue: o cliente deve repetir o pedido ao balcão."
+    assert _saldos(app, o) == [(100000, 0)]
+    assert contas_bancarias.verificar_saldos(_sessoes(app)) == []
+    assert _alerta(app, i).estado == "falso_alarme"

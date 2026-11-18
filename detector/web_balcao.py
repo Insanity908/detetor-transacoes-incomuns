@@ -11,6 +11,7 @@ from . import acesso, acesso_cliente, clientes, contas_bancarias
 from .autorizacao import PedidoDebito, autorizar
 from .acesso import auditar, exige_area, utilizador_atual
 from .dinheiro import de_centavos, para_centavos
+from .contas_bancarias import NOMES_TIPO
 from .explicacao import formatar_decimal
 from .gerador import CATEGORIA_LEVANTAMENTO, CIDADES
 
@@ -18,8 +19,6 @@ ENDPOINTS = frozenset({"balcao_clientes", "balcao_cliente_novo", "balcao_cliente
                        "balcao_cliente_editar", "balcao_cliente_deposito", "balcao_cliente_bloquear",
                        "balcao_cliente_levantamento", "balcao_cliente_acesso"})
 acesso.ENDPOINTS_BALCAO.update(ENDPOINTS)
-NOMES_TIPO = {"deposito": "Depósito", "levantamento": "Levantamento", "compra": "Compra",
-              "transferencia_enviada": "Transferência enviada", "transferencia_recebida": "Transferência recebida"}
 NOMES_ESTADO = {"autorizado": "Autorizado", "recusado": "Recusado", "retido": "Retido", "cancelado": "Cancelado"}
 CAMPOS_FICHA = ("nome", "data_nascimento", "tipo_documento", "numero_documento", "telefone", "email", "cidade", "morada")
 

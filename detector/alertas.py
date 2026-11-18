@@ -327,7 +327,6 @@ class Indicadores:
 
 
 def indicadores(sessoes: sessionmaker, dias: int = 30, hoje: date | None = None) -> Indicadores:
-    from .autorizacao import MOTIVO_RISCO  # import tardio: autorizacao importa este módulo
     hoje = hoje or date.today()
     inicio = hoje - timedelta(days=dias - 1)
     desde = datetime.combine(inicio, datetime.min.time())
@@ -342,7 +341,7 @@ def indicadores(sessoes: sessionmaker, dias: int = 30, hoje: date | None = None)
         valor_protegido = sessao.execute(select(func.coalesce(func.sum(Movimento.valor), 0)).where(
             Movimento.momento >= desde,
             or_((Movimento.estado == "cancelado") & (Movimento.motivo == contas_bancarias.MOTIVO_FRAUDE),
-                (Movimento.estado == "recusado") & (Movimento.motivo == MOTIVO_RISCO)))).scalar_one()
+                (Movimento.estado == "recusado") & (Movimento.motivo == contas_bancarias.MOTIVO_RISCO)))).scalar_one()
     ind = Indicadores(dias=dias, inicio=inicio, valor_retido=int(valor_retido), valor_protegido=int(valor_protegido))
 
     contagem = {inicio + timedelta(days=i): Counter() for i in range(dias)}

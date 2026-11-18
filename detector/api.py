@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from . import chaves_api, dinheiro, repositorio
+from . import chaves_api, contas_bancarias, dinheiro, repositorio
 from .autorizacao import Decisao, PedidoDebito, autorizar
 from .banco import Cliente, ContaBancaria, Movimento
 from .contas_bancarias import creditar
@@ -402,7 +402,7 @@ def _gravar_depositos(sessoes, depositos: list[dict]) -> tuple[list[dict], int]:
                                    "saldo": conta.saldo / 100})
             elif conta.estado == "bloqueada":
                 resultados.append({"id_deposito": d["id_deposito"], "estado": "recusado",
-                                   "motivo": "A conta está bloqueada e não pode receber dinheiro.",
+                                   "motivo": contas_bancarias.MOTIVO_CREDITO_BLOQUEADO,
                                    "saldo": conta.saldo / 100})
             else:
                 m = creditar(s, conta.id, d["valor"], "deposito", "api", g.chave_api.nome, d["momento"],
