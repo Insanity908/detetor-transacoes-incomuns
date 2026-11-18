@@ -7,6 +7,7 @@ NOMES_CATEGORIA = {
     "MERCEARIA": "mercearia", "COMBUSTIVEL": "combustível", "RESTAURANTE": "restaurante", "FARMACIA": "farmácia",
     "RECARGA_TELEMOVEL": "recarga de telemóvel", "TRANSPORTE": "transporte", "VESTUARIO": "vestuário",
     "ELETRONICA": "eletrónica", "VIAGEM": "viagem",
+    "TRANSFERENCIA": "transferência", "LEVANTAMENTO": "levantamento",
 }
 LIMIAR_VALOR, LIMIAR_HORA, LIMIAR_RAJADA = 3, 0.9, 3
 

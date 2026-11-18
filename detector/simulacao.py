@@ -2,7 +2,7 @@
 
 Usa os mesmos clientes que o gerador do treino (mesma semente e número de clientes): cada cliente continua
 com a sua cidade, horário de pico, valor típico e categorias, por isso o modelo reconhece os seus hábitos.
-Por cima das compras normais injeta os 5 tipos de fraude que o gerador conhece.
+Por cima das compras normais injeta os 6 tipos de fraude que o gerador conhece.
 
 Cenários de mudança (opção --cenario), para mostrar a monitorização a detetar a queda de desempenho e o
 re-treino a corrigi-la:
@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from . import gerador
-from .gerador import CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
+from .gerador import CATEGORIA_TRANSFERENCIA, CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
 
 DESVIO_HORA = 2.5  # como gerador._hora
 FRACAO_NOTURNA = 0.02  # compras legítimas entre a meia-noite e as 5h
@@ -181,6 +181,10 @@ class Simulador:
             madrugada = dia.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=float(self.rng.uniform(1, 5)))
             return [(quando, self._transacao(c, madrugada, c["tipico"] * self.rng.lognormal(0.3, 0.6), cidade,
                                              PAIS_HABITUAL, categoria(), tipo))]
+        if tipo == "conta_esvaziada":  # uma transferência enorme, de uma cidade que não é a do cliente
+            outra = str(self.rng.choice([x for x in CIDADES if x != cidade]))
+            return [(quando, self._transacao(c, quando, c["tipico"] * self.rng.uniform(15, 40), outra, PAIS_HABITUAL,
+                                             CATEGORIA_TRANSFERENCIA, tipo))]
         # conta_tomada: cidade nova, categoria nova e valor médio-alto
         outra = str(self.rng.choice([x for x in CIDADES if x != cidade]))
         novas = [x for x in CATEGORIAS if x not in c["categorias"]]

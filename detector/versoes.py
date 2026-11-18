@@ -25,10 +25,20 @@ def _agora() -> datetime:
     return datetime.now().replace(microsecond=0)
 
 
+def conhece_movimentos(artefatos: Artefatos) -> bool:
+    """Se o histórico do treino já tinha transferências (as versões anteriores a elas não as conhecem)."""
+    return bool("categoria" in artefatos.historico.columns and (artefatos.historico["categoria"] == "TRANSFERENCIA").any())
+
+
+def sem_movimentos(versao: VersaoModelo | None) -> bool:
+    """Versão treinada antes das transferências e dos levantamentos: vai alertar mais nesses movimentos."""
+    return versao is not None and versao.estado != "falhou" and not ler_metricas(versao).get("conhece_movimentos")
+
+
 def metricas_do_teste(artefatos: Artefatos) -> dict:
     """O desempenho da versão no seu período de teste, medido como o analista o vê (nível diferente de Normal)."""
     teste = artefatos.teste_avaliado
-    resultado = {"classificador": artefatos.detector.escolhido}
+    resultado = {"classificador": artefatos.detector.escolhido, "conhece_movimentos": conhece_movimentos(artefatos)}
     if teste is not None and len(teste) and "fraude" in teste.columns:
         resultado["teste_alertas"] = metricas_alerta(teste["fraude"].to_numpy(), teste["nivel"].to_numpy())
     return resultado

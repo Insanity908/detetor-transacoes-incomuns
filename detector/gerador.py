@@ -19,9 +19,13 @@ PESO_CIDADES = (0.35, 0.2, 0.15, 0.12, 0.1, 0.08)
 CATEGORIAS = ("MERCEARIA", "COMBUSTIVEL", "RESTAURANTE", "FARMACIA", "RECARGA_TELEMOVEL", "TRANSPORTE",
               "VESTUARIO", "ELETRONICA", "VIAGEM")
 PESO_CATEGORIAS = (0.2, 0.12, 0.12, 0.1, 0.16, 0.12, 0.08, 0.05, 0.05)
-TIPOS_FRAUDE = ("valor_alto", "pais_estranho", "horario_estranho", "rajada", "conta_tomada")
+CATEGORIA_TRANSFERENCIA = "TRANSFERENCIA"  # não entram em CATEGORIAS: as compras só escolhem categorias de compra
+CATEGORIA_LEVANTAMENTO = "LEVANTAMENTO"
+TRANSFERENCIAS_POR_MES = 2.0
+LEVANTAMENTOS_POR_MES = 2.0
+TIPOS_FRAUDE = ("valor_alto", "pais_estranho", "horario_estranho", "rajada", "conta_tomada", "conta_esvaziada")
 NOMES_TIPO_FRAUDE = {"valor_alto": "Valor alto", "pais_estranho": "País estranho", "horario_estranho": "Horário estranho",
-                     "rajada": "Rajada", "conta_tomada": "Conta tomada"}
+                     "rajada": "Rajada", "conta_tomada": "Conta tomada", "conta_esvaziada": "Conta esvaziada"}
 PAISES_ESTRANHOS = ("NG", "AE", "CN", "BR", "IN", "ZW", "MW", "TZ")
 FRACAO_CLIENTES_NOVOS = 0.25  # aderem depois do aquecimento, para o modelo ver clientes sem histórico
 DIA_ADESAO_MIN = 30  # índice 0: dia 31
@@ -73,7 +77,7 @@ def _legitimas(rng: np.random.Generator, c: dict, dias: int, t0: pd.Timestamp) -
     grande = rng.random(n) < 0.01
     valor[grande] = c["tipico"] * rng.uniform(3, 8, grande.sum())
     pais = np.where(rng.random(n) < 0.01, "ZA", PAIS_HABITUAL)
-    return pd.DataFrame({
+    compras = pd.DataFrame({
         "cliente": c["cliente"],
         "data_hora": t0 + pd.to_timedelta(dia, "D") + pd.to_timedelta(hora * 60, "min"),
         "valor": valor,
@@ -83,6 +87,25 @@ def _legitimas(rng: np.random.Generator, c: dict, dias: int, t0: pd.Timestamp) -
         "fraude": 0,
         "tipo_fraude": "",
     })
+    return pd.concat([compras, _movimentos(rng, c, dias, t0)], ignore_index=True)
+
+
+def _movimentos(rng: np.random.Generator, c: dict, dias: int, t0: pd.Timestamp) -> pd.DataFrame:
+    """Transferências e levantamentos legítimos: na cidade do cliente e nas horas habituais."""
+    partes = []
+    for categoria, por_mes, media, desvio in ((CATEGORIA_TRANSFERENCIA, TRANSFERENCIAS_POR_MES, 1.0, 0.5),
+                                              (CATEGORIA_LEVANTAMENTO, LEVANTAMENTOS_POR_MES, 0.7, 0.4)):
+        n = int(rng.poisson(por_mes * (dias - c["adesao"]) / 30))
+        dia = rng.integers(c["adesao"], dias, n)
+        valor = c["tipico"] * rng.lognormal(media, desvio, n)
+        if categoria == CATEGORIA_LEVANTAMENTO:
+            valor = np.maximum(np.round(valor / 100) * 100, 100)  # arredondado a 100 MT
+        partes.append(pd.DataFrame({
+            "cliente": c["cliente"],
+            "data_hora": t0 + pd.to_timedelta(dia, "D") + pd.to_timedelta(_hora(rng, c["pico"], n) * 60, "min"),
+            "valor": valor, "cidade": _cidade_no_dia(c, dia), "pais": PAIS_HABITUAL, "categoria": categoria,
+            "fraude": 0, "tipo_fraude": ""}))
+    return pd.concat(partes, ignore_index=True)
 
 
 def _fraude(rng: np.random.Generator, c: dict, tipo: str, dias: int, t0: pd.Timestamp,
@@ -105,6 +128,9 @@ def _fraude(rng: np.random.Generator, c: dict, tipo: str, dias: int, t0: pd.Time
     elif tipo == "horario_estranho":
         valor, cat = c["tipico"] * rng.lognormal(0.3, 0.6), categoria(1)[0]
         inicio = t0 + pd.Timedelta(days=dia) + pd.Timedelta(minutes=float(rng.uniform(1, 5)) * 60)
+    elif tipo == "conta_esvaziada":  # uma transferência enorme, para fora, de uma cidade que não é a do cliente
+        valor, cat = c["tipico"] * rng.uniform(15, 40), CATEGORIA_TRANSFERENCIA
+        linhas["cidade"] = str(rng.choice([x for x in CIDADES if x != cidade]))
     else:  # conta_tomada: cidade nova, categoria nova e valor médio-alto
         valor = c["tipico"] * rng.uniform(2, 5)
         linhas["cidade"] = str(rng.choice([x for x in CIDADES if x != cidade]))
@@ -119,7 +145,8 @@ def gerar_transacoes(n_clientes: int = 300, dias: int = DIAS, semente: int = 42,
     t0 = pd.Timestamp(inicio)
     clientes = _clientes(rng, n_clientes, dias)
     legitimas = pd.concat([_legitimas(rng, c, dias, t0) for c in clientes], ignore_index=True)
-    proporcoes = legitimas["categoria"].value_counts(normalize=True)
+    compras = legitimas.loc[legitimas["categoria"].isin(CATEGORIAS), "categoria"]
+    proporcoes = compras.value_counts(normalize=True)  # as fraudes de compra seguem só as compras
     eventos = max(int(round(EVENTOS_POR_TRANSACAO * len(legitimas))), len(TIPOS_FRAUDE))
     tipos = [TIPOS_FRAUDE[i % len(TIPOS_FRAUDE)] for i in range(eventos)]  # todos os tipos aparecem
     escolhidos = rng.integers(0, n_clientes, eventos)

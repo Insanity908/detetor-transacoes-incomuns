@@ -15,6 +15,10 @@
 <p class="erro" role="alert">{{ v.erro }}</p>
 {% endif %}
 
+{% if aviso_movimentos and v.estado in ('candidata', 'anterior', 'publicada') %}
+<p class="erro" role="alert">Esta versão não conhece transferências nem levantamentos: vai dar mais alertas nesses movimentos.</p>
+{% endif %}
+
 {% set c = m.get('comparacao') %}
 {% if c %}
 <h2>Comparação com a versão {{ c.publicada }} nas mesmas transações</h2>

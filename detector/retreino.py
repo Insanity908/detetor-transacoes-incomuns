@@ -173,7 +173,8 @@ def treinar_nova_versao(atual: Artefatos, sessoes: sessionmaker, pasta: Path, co
         registo.exception("Não foi possível desenhar os gráficos da nova versão")
     novos = Artefatos(detector, todos, teste_avaliado, resultados, pasta)
     gravar(pasta, novos)
-    metricas_versao = {"classificador": detector.escolhido, "teste_alertas": comparacao["nova"],
+    metricas_versao = {"classificador": detector.escolhido, "conhece_movimentos": versoes.conhece_movimentos(novos),
+                       "teste_alertas": comparacao["nova"],
                        "comparacao": comparacao, "dados": resultados["dados"], "periodos": resultados["periodos"]}
     return novos, metricas_versao
 

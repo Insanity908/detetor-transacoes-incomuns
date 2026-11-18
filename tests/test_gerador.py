@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from detector.gerador import CIDADES, TIPOS_FRAUDE, gerar_transacoes
+from detector.gerador import CATEGORIAS, CIDADES, TIPOS_FRAUDE, gerar_transacoes
 
 
 @pytest.fixture(scope="module")
@@ -39,8 +39,9 @@ def test_ruido_legitimo_existe(completo):
 
 
 def test_categorias_das_fraudes_seguem_as_legitimas(completo):
-    p_legit = completo[completo.fraude == 0].categoria.value_counts(normalize=True)
-    fraudes = completo[(completo.fraude == 1) & (completo.tipo_fraude != "conta_tomada")]
+    compras = completo[completo.categoria.isin(CATEGORIAS)]
+    p_legit = compras[compras.fraude == 0].categoria.value_counts(normalize=True)
+    fraudes = compras[(compras.fraude == 1) & (compras.tipo_fraude != "conta_tomada")]
     p_fraude = fraudes.categoria.value_counts(normalize=True)
     assert (p_fraude.reindex(p_legit.index, fill_value=0) - p_legit).abs().max() < 0.10
 
@@ -61,3 +62,24 @@ def test_clientes_tardios_tem_compras_e_nada_antes_da_adesao(completo):
     primeira = completo.groupby("cliente").data_hora.min()
     tardios = primeira[primeira >= pd.Timestamp("2026-01-31")].index
     assert completo[completo.cliente.isin(tardios)].groupby("cliente").size().min() >= 5
+
+
+def test_transferencias_levantamentos_e_conta_esvaziada():
+    from detector.gerador import CATEGORIA_LEVANTAMENTO, CATEGORIA_TRANSFERENCIA, CATEGORIAS
+    df = gerar_transacoes(40, 60)
+    assert {CATEGORIA_TRANSFERENCIA, CATEGORIA_LEVANTAMENTO} <= set(df.categoria)
+    assert not {CATEGORIA_TRANSFERENCIA, CATEGORIA_LEVANTAMENTO} & set(CATEGORIAS)
+    assert (df.tipo_fraude == "conta_esvaziada").any()
+    esvaziada = df[df.tipo_fraude == "conta_esvaziada"]
+    assert (esvaziada.categoria == CATEGORIA_TRANSFERENCIA).all()
+    tomada = df[df.tipo_fraude == "conta_tomada"]
+    assert not tomada.categoria.isin([CATEGORIA_TRANSFERENCIA, CATEGORIA_LEVANTAMENTO]).any()
+    assert 0.005 <= df.fraude.mean() <= 0.02
+
+
+def test_simulador_gera_conta_esvaziada():
+    from datetime import datetime
+    from detector.simulacao import Simulador, clientes_do_treino
+    sim = Simulador(clientes_do_treino(20), datetime(2026, 6, 1, 12), semente=1)
+    (_, t), = sim._fraude(sim.clientes[0], "conta_esvaziada", datetime(2026, 6, 1, 12))
+    assert t["categoria"] == "TRANSFERENCIA" and t["simulacao"] == {"fraude": True, "tipo": "conta_esvaziada"}

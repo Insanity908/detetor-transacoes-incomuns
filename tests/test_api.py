@@ -363,7 +363,7 @@ def test_simulador_usa_os_clientes_do_treino(artefatos_pequenos):
     assert {c["cliente"] for c in clientes} == set(historico["cliente"])
     c = clientes[0]
     compras = historico[(historico["cliente"] == c["cliente"]) & (historico["fraude"] == 0)]
-    assert set(compras["categoria"]) <= set(c["categorias"])
+    assert set(compras["categoria"]) - {"TRANSFERENCIA", "LEVANTAMENTO"} <= set(c["categorias"])
 
 
 def test_simulador_gera_o_ritmo_e_a_fraude_pedidos():
@@ -373,7 +373,7 @@ def test_simulador_gera_o_ritmo_e_a_fraude_pedidos():
     assert 600 < len(transacoes) / 14 < 800  # ~685 compras por dia nos 300 clientes
     assert 3.5 < 100 * len(fraudes) / len(transacoes) < 6.5
     assert {t["simulacao"]["tipo"] for t in fraudes} == {"valor_alto", "pais_estranho", "horario_estranho", "rajada",
-                                                         "conta_tomada"}
+                                                         "conta_tomada", "conta_esvaziada"}
     assert len({t["id_transacao"] for t in transacoes}) == len(transacoes)
     horas = [datetime.fromisoformat(t["data_hora"]).hour for t in transacoes if not t["simulacao"]["fraude"]]
     assert sum(h < 5 for h in horas) / len(horas) < 0.05  # de madrugada há poucas compras legítimas

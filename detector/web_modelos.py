@@ -69,7 +69,8 @@ def instalar(app: Flask, sessoes: sessionmaker, pasta_modelos: Path) -> None:
         if v is None:
             abort(404)
         return render_template("versao.html", v=v, m=versoes.ler_metricas(v), estados=versoes.NOMES_ESTADO,
-                               nomes=NOMES, tipos=NOMES_TIPO_SIMULACAO, periodos=NOMES_PERIODO)
+                               nomes=NOMES, tipos=NOMES_TIPO_SIMULACAO, periodos=NOMES_PERIODO,
+                               aviso_movimentos=versoes.sem_movimentos(v))
 
     @app.post("/modelos/versoes/<int:numero>/publicar")
     @exige("supervisor")

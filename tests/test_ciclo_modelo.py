@@ -313,3 +313,12 @@ def test_retreinar_publicar_e_voltar_atras(app):
     chefe.post("/modelos/versoes/1/publicar")  # voltar atrás
     assert app.config["ARTEFATOS"].versao == 1 and versoes.publicada(_sessoes(app)).numero == 1
     assert versoes.obter(_sessoes(app), numero).estado == "anterior"
+
+
+def test_aviso_de_versao_sem_transferencias_nem_levantamentos(app):
+    chefe = criar_cliente(app, "supervisor")
+    aviso = "não conhece transferências nem levantamentos"
+    assert aviso not in chefe.get("/modelos/versoes/1").get_data(as_text=True)  # treinada com as categorias novas
+    with _sessoes(app).begin() as s:  # uma versão de antes desta funcionalidade não tem a marca nas métricas
+        s.execute(update(VersaoModelo).where(VersaoModelo.numero == 1).values(metricas="{}"))
+    assert aviso in chefe.get("/modelos/versoes/1").get_data(as_text=True)
