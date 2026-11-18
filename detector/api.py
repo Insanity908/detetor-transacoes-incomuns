@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from flask import Blueprint, Flask, current_app, g, jsonify, request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from . import chaves_api, dinheiro, repositorio
@@ -220,7 +221,7 @@ def _movimentos_anteriores(sessoes, contas: dict[str, int]) -> dict[str, Decisao
     with sessoes() as s:
         linhas = s.execute(select(Movimento.id_transacao, Movimento.conta_id, Movimento.id, Movimento.estado,
                                   Movimento.motivo)
-                           .where(Movimento.id_transacao.in_(sorted(contas)), Movimento.tipo != "deposito")
+                           .where(Movimento.id_transacao.in_(sorted(contas)), ~Movimento.id_transacao.like(PREFIXO_DEPOSITO + "%"))
                            .order_by(Movimento.id)).all()
     return {i: Decisao(m, e, mo, None, None, None) for i, c, m, e, mo in reversed(linhas) if contas[i] == c}
 
@@ -265,26 +266,39 @@ def receber_transacoes():
 
     # Transações do banco: as repetidas devolvem o movimento já gravado; as novas passam por autorizar().
     conta_por_id = {transacoes.at[i, "id_transacao"]: int(conta_de[i]) for i in transacoes.index[do_banco]}
-    vistos = _movimentos_anteriores(sessoes, conta_por_id) if conta_por_id else {}
-    pedidos = []
-    for i in transacoes.index[do_banco]:
-        linha = transacoes.loc[i]
-        if linha["id_transacao"] in vistos:
+    vistos: dict[str, Decisao] = {}
+    pedidos: list[PedidoDebito] = []
+    decisoes: dict[str, Decisao] = {}
+    for _tentativa in range(2):
+        vistos = _movimentos_anteriores(sessoes, conta_por_id) if conta_por_id else {}
+        pedidos = []
+        for i in transacoes.index[do_banco]:
+            linha = transacoes.loc[i]
+            if linha["id_transacao"] in vistos:
+                continue
+            simulada = not pd.isna(linha["fraude_simulada"])
+            pedidos.append(PedidoDebito(
+                conta_id=conta_por_id[linha["id_transacao"]],
+                tipo="transferencia_enviada" if linha["categoria"].upper() == CATEGORIA_TRANSFERENCIA else "compra",
+                valor=centimos[i], momento=linha["data_hora"].to_pydatetime(), cidade=linha["cidade"],
+                pais=linha["pais"], categoria=linha["categoria"], canal="simulador" if simulada else "api",
+                por=g.chave_api.nome, id_transacao=linha["id_transacao"],
+                fraude_simulada=bool(linha["fraude_simulada"]) if simulada else None,
+                tipo_fraude_simulada=(linha["tipo_fraude_simulada"]
+                                      if simulada and linha["tipo_fraude_simulada"] else None)))
+        if not pedidos:
+            break
+        try:
+            decididas = autorizar(sessoes, artefatos, pedidos, current_app.config.get("CORTES"), "api",
+                                  chave_api_id=g.chave_api.id)
+        except IntegrityError:
+            # Um pedido sobreposto gravou o mesmo id entretanto (o índice único recusou); autorizar() desfez
+            # tudo, por isso repete-se uma vez só com os ids que ainda faltam.
+            if _tentativa == 1:
+                raise
             continue
-        simulada = not pd.isna(linha["fraude_simulada"])
-        pedidos.append(PedidoDebito(
-            conta_id=conta_por_id[linha["id_transacao"]],
-            tipo="transferencia_enviada" if linha["categoria"].upper() == CATEGORIA_TRANSFERENCIA else "compra",
-            valor=centimos[i], momento=linha["data_hora"].to_pydatetime(), cidade=linha["cidade"],
-            pais=linha["pais"], categoria=linha["categoria"], canal="simulador" if simulada else "api",
-            por=g.chave_api.nome, id_transacao=linha["id_transacao"],
-            fraude_simulada=bool(linha["fraude_simulada"]) if simulada else None,
-            tipo_fraude_simulada=linha["tipo_fraude_simulada"] if simulada and linha["tipo_fraude_simulada"] else None))
-    decisoes = {}
-    if pedidos:
-        decididas = autorizar(sessoes, artefatos, pedidos, current_app.config.get("CORTES"), "api",
-                              chave_api_id=g.chave_api.id)
         decisoes = {p.id_transacao: d for p, d in zip(pedidos, decididas)}
+        break
     avaliadas = repositorio.resultados_api(
         sessoes, [i for i, d in decisoes.items() if d.nivel is not None] + list(vistos))
 
@@ -310,6 +324,8 @@ def receber_transacoes():
 
 DEPOSITO_CAMPOS = ("id_deposito", "cliente", "valor", "data_hora")
 DEPOSITO_OPCIONAIS = ("descricao",)
+PREFIXO_DEPOSITO = "DEP:"
+PADRAO_ID_DEPOSITO = re.compile(r"^[A-Za-z0-9._:\-]{1,96}$")  # + o prefixo cabe nos 100 do id
 
 
 def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[dict]:
@@ -340,9 +356,9 @@ def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[di
             continue
         n_erros = len(erros)
         id_deposito = item["id_deposito"]
-        if not isinstance(id_deposito, str) or not PADRAO_ID.match(id_deposito):
+        if not isinstance(id_deposito, str) or not PADRAO_ID_DEPOSITO.match(id_deposito):
             erros.append({"indice": i, "campo": "id_deposito",
-                          "erro": "1 a 100 caracteres: letras, números, '.', '_', ':' ou '-'"})
+                          "erro": "1 a 96 caracteres: letras, números, '.', '_', ':' ou '-'"})
         elif id_deposito in vistos:
             erros.append({"indice": i, "campo": "id_deposito", "erro": "repetido neste pedido"})
         vistos.add(id_deposito if isinstance(id_deposito, str) else None)
@@ -370,6 +386,33 @@ def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[di
     return linhas
 
 
+def _gravar_depositos(sessoes, depositos: list[dict]) -> tuple[list[dict], int]:
+    """Credita os depósitos novos numa só transação; os já gravados devolvem o estado e o saldo atual."""
+    resultados, novos = [], 0
+    with sessoes.begin() as s:
+        for d in depositos:
+            conta = s.get(ContaBancaria, d["conta_id"])
+            # O id fica guardado com o prefixo DEP: para partilhar o índice único sem colidir com ids de transações.
+            chave = PREFIXO_DEPOSITO + d["id_deposito"]
+            anterior = s.scalar(select(Movimento).where(Movimento.id_transacao == chave,
+                                                        Movimento.conta_id == conta.id))
+            if anterior is not None:
+                resultados.append({"id_deposito": d["id_deposito"], "estado": anterior.estado,
+                                   "saldo": conta.saldo / 100})
+            elif conta.estado == "bloqueada":
+                resultados.append({"id_deposito": d["id_deposito"], "estado": "recusado",
+                                   "motivo": "A conta está bloqueada e não pode receber dinheiro.",
+                                   "saldo": conta.saldo / 100})
+            else:
+                m = creditar(s, conta.id, d["valor"], "deposito", "api", g.chave_api.nome, d["momento"],
+                             d["descricao"])
+                m.id_transacao = chave
+                s.flush()
+                novos += 1
+                resultados.append({"id_deposito": d["id_deposito"], "estado": m.estado, "saldo": m.saldo_apos / 100})
+    return resultados, novos
+
+
 @bp.post("/depositos")
 def receber_depositos():
     sessoes: sessionmaker = current_app.config["SESSOES"]
@@ -382,26 +425,14 @@ def receber_depositos():
         depositos = _validar_depositos(corpo, sessoes)
     except ErroValidacao as exc:
         return erro(422, "dados_invalidos", "Há depósitos com dados inválidos; nada foi gravado.", erros=exc.erros)
-    resultados, novos = [], 0
-    with sessoes.begin() as s:
-        for d in depositos:
-            conta = s.get(ContaBancaria, d["conta_id"])
-            # O id do depósito só se compara com depósitos: nunca colide com o id de uma transação.
-            anterior = s.scalar(select(Movimento).where(Movimento.id_transacao == d["id_deposito"],
-                                                        Movimento.conta_id == conta.id, Movimento.tipo == "deposito"))
-            if anterior is not None:
-                resultados.append({"id_deposito": d["id_deposito"], "estado": anterior.estado,
-                                   "saldo": conta.saldo / 100})
-            elif conta.estado == "bloqueada":
-                resultados.append({"id_deposito": d["id_deposito"], "estado": "recusado",
-                                   "motivo": "A conta está bloqueada e não pode receber dinheiro.",
-                                   "saldo": conta.saldo / 100})
-            else:
-                m = creditar(s, conta.id, d["valor"], "deposito", "api", g.chave_api.nome, d["momento"],
-                             d["descricao"])
-                m.id_transacao = d["id_deposito"]
-                novos += 1
-                resultados.append({"id_deposito": d["id_deposito"], "estado": m.estado, "saldo": m.saldo_apos / 100})
+    for _tentativa in range(2):
+        try:
+            resultados, novos = _gravar_depositos(sessoes, depositos)
+            break
+        except IntegrityError:
+            # Um pedido sobreposto gravou o mesmo id_deposito entretanto; tudo foi desfeito, repete-se uma vez.
+            if _tentativa == 1:
+                raise
     chaves_api.registar_uso(sessoes, g.chave_api.id, novos)
     registo.info("API (%s): %d depósito(s) novo(s) em %d recebido(s)", g.chave_api.nome, novos, len(depositos))
     return jsonify({"resultados": resultados})

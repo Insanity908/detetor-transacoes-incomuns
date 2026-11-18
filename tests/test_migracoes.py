@@ -98,3 +98,36 @@ def test_migracao_0006_cria_e_remove_o_banco(ambiente_de_teste):
     command.upgrade(cfg, "0006")
     assert tabelas_novas <= tabelas()
     motor.dispose()
+
+
+def test_migracao_0007_impede_id_repetido_por_conta(ambiente_de_teste):
+    url = "sqlite:///" + (ambiente_de_teste / "unico.db").as_posix()
+    cfg = configuracao_alembic(url)
+    command.upgrade(cfg, "0006")
+    motor = criar_motor(url)
+    with motor.begin() as c:
+        c.execute(text("INSERT INTO clientes (id, codigo, nome, data_nascimento, tipo_documento, numero_documento, "
+                       "telefone, cidade, morada, sintetico, criado_em, criado_por) VALUES (1, 'C0001', 'Ana', "
+                       "'1990-01-01', 'BI', '123', '840000000', 'Maputo', 'Rua 1', 0, '2026-05-01 10:00:00', 'x')"))
+        c.execute(text("INSERT INTO contas_bancarias (id, numero, cliente_id, saldo, saldo_retido, estado, aberta_em) "
+                       "VALUES (1, '0001', 1, 1000, 0, 'ativa', '2026-05-01 10:00:00')"))
+    command.upgrade(cfg, "0007")
+    inserir = ("INSERT INTO movimentos (conta_id, tipo, valor, estado, canal, momento, registado_em, criado_por, "
+               "id_transacao) VALUES (1, 'compra', 5, 'autorizado', 'api', '2026-05-01', '2026-05-01', 'x', {})")
+    with motor.begin() as c:  # sem id (balcão) pode haver vários
+        c.execute(text(inserir.format("NULL")))
+        c.execute(text(inserir.format("NULL")))
+        c.execute(text(inserir.format("'A'")))
+    try:
+        with motor.begin() as c:
+            c.execute(text(inserir.format("'A'")))
+    except Exception:
+        pass
+    else:
+        raise AssertionError("o índice único devia recusar o mesmo id na mesma conta")
+    assert _contar(motor, "movimentos") == 3
+    command.downgrade(cfg, "0006")
+    with motor.begin() as c:
+        c.execute(text(inserir.format("'A'")))
+    assert _contar(motor, "movimentos") == 4
+    motor.dispose()

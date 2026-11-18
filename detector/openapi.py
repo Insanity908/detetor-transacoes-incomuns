@@ -63,7 +63,7 @@ def especificacao(servidor: str = "") -> dict:
                                "(nulo para os restantes). Uma transação repetida devolve o movimento já gravado, "
                                "sem debitar outra vez. A categoria TRANSFERENCIA é uma saída para fora do banco.",
                 "properties": {
-                    "estado": {"type": "string", "enum": ["autorizado", "retido", "recusado"]},
+                    "estado": {"type": "string", "enum": ["autorizado", "retido", "recusado", "cancelado"]},
                     "motivo": {"type": "string", "nullable": True,
                                "description": "Porque foi recusado (por exemplo, saldo insuficiente)."}},
             },
@@ -73,7 +73,7 @@ def especificacao(servidor: str = "") -> dict:
         "type": "object", "additionalProperties": False,
         "required": ["id_deposito", "cliente", "valor", "data_hora"],
         "properties": {
-            "id_deposito": {"type": "string", "pattern": "^[A-Za-z0-9._:\\-]{1,100}$", "example": "DEP-000123",
+            "id_deposito": {"type": "string", "pattern": "^[A-Za-z0-9._:\\-]{1,96}$", "example": "DEP-000123",
                             "description": "Identificador único do depósito. Reenviar o mesmo id não soma outra "
                                            "vez ao saldo."},
             "cliente": {"type": "string", "maxLength": 100, "example": "C0001",

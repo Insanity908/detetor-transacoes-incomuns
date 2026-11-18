@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, String, Text,
-                        UniqueConstraint, create_engine, event, text)
+                        UniqueConstraint, Index, create_engine, event, text)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -337,7 +337,9 @@ class ContaBancaria(Base):
 class Movimento(Base):
     """Uma operação pedida a uma conta e o que foi decidido (autorizada, recusada, retida ou cancelada)."""
     __tablename__ = "movimentos"
-    __table_args__ = (CheckConstraint("valor > 0", name="ck_movimentos_valor"),)
+    __table_args__ = (CheckConstraint("valor > 0", name="ck_movimentos_valor"),
+                      Index("ux_movimentos_conta_id_transacao", "conta_id", "id_transacao", unique=True,
+                            sqlite_where=text("id_transacao IS NOT NULL")))
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conta_id: Mapped[int] = mapped_column(ForeignKey("contas_bancarias.id"), index=True)

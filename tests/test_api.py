@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 import simulador
 from app import criar_app
@@ -479,15 +480,46 @@ def _saldo(app, conta_id):
         return s.get(ContaBancaria, conta_id).saldo
 
 
-def test_cliente_com_conta_e_saldo_e_autorizado_e_debitado(app, chave):
+def _forcar(monkeypatch, nivel="Normal", risco=10.0):
+    """Força o nível e o risco que o detetor devolve às transações das contas (o modelo real é irrelevante aqui)."""
+    from detector import autorizacao
+
+    def falso(artefatos, df, historico_extra=None, cortes=None):
+        r = df.copy().reset_index(drop=True)
+        r["risco"], r["anomalia"], r["nivel"] = risco, 10.0, nivel
+        r["motivos"] = [["teste"]] * len(r)
+        r["historico_curto"] = False
+        return r
+    monkeypatch.setattr(autorizacao, "avaliar_transacoes", falso)
+
+
+def _saldos_certos(app):
+    from detector import contas_bancarias
+    assert contas_bancarias.verificar_saldos(_sessoes(app)) == []
+
+
+def test_cliente_com_conta_e_saldo_e_autorizado_e_debitado(app, chave, monkeypatch):
+    _forcar(monkeypatch)
     conta = _cliente_banco(app, saldo=100_000)
     r = _api(app, chave, json=_transacao(cliente="B0001", valor=150.0))
     assert r.status_code == 200, r.json
     res = r.json["resultados"][0]
-    assert res["movimento"]["estado"] in ("autorizado", "retido", "recusado")
-    if res["movimento"]["estado"] == "autorizado":
-        assert _saldo(app, conta) == 100_000 - 15_000
-    assert res["nivel"] is not None and res["duplicada"] is False
+    assert res["movimento"] == {"estado": "autorizado", "motivo": None}
+    assert res["nivel"] == "Normal" and res["duplicada"] is False
+    assert _saldo(app, conta) == 100_000 - 15_000
+    _saldos_certos(app)
+
+
+def test_alto_risco_fica_retido_com_alerta(app, chave, monkeypatch):
+    from detector.banco import ContaBancaria
+    _forcar(monkeypatch, "Alto risco", 70.0)
+    conta = _cliente_banco(app, saldo=100_000)
+    res = _api(app, chave, json=_transacao(cliente="B0001", valor=150.0)).json["resultados"][0]
+    assert res["movimento"]["estado"] == "retido" and res["alerta"] is True and res["alerta_id"]
+    with _sessoes(app)() as s:
+        c = s.get(ContaBancaria, conta)
+        assert (c.saldo, c.saldo_retido) == (100_000, 15_000)
+    _saldos_certos(app)
 
 
 def test_cliente_com_conta_sem_saldo_e_recusado(app, chave):
@@ -527,12 +559,14 @@ def test_repetida_de_conta_nao_debita_duas_vezes(app, chave):
     assert _contar(app, Movimento, Movimento.id_transacao == "T-1") == 1
 
 
-def test_repetida_autorizada_devolve_o_mesmo_estado(app, chave):
-    conta = _cliente_banco(app, saldo=10_000_000)
+def test_repetida_autorizada_devolve_o_mesmo_estado(app, chave, monkeypatch):
+    _forcar(monkeypatch)
+    conta = _cliente_banco(app, saldo=100_000)
     r1 = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0)).json["resultados"][0]
-    saldo = _saldo(app, conta)
+    assert r1["movimento"]["estado"] == "autorizado" and _saldo(app, conta) == 99_000
     r2 = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0)).json["resultados"][0]
-    assert r2["duplicada"] is True and r2["movimento"] == r1["movimento"] and _saldo(app, conta) == saldo
+    assert r2["duplicada"] is True and r2["movimento"] == r1["movimento"] and _saldo(app, conta) == 99_000
+    _saldos_certos(app)
 
 
 def test_valor_com_tres_casas_para_conta_e_invalido(app, chave):
@@ -542,15 +576,18 @@ def test_valor_com_tres_casas_para_conta_e_invalido(app, chave):
     assert _saldo(app, conta) == 100_000
 
 
-def test_transferencia_de_simulacao_sai_para_fora(app, chave):
+def test_transferencia_de_simulacao_sai_para_fora(app, chave, monkeypatch):
     from detector.banco import Movimento
-    _cliente_banco(app, saldo=10_000_000)
+    _forcar(monkeypatch)
+    conta = _cliente_banco(app, saldo=100_000)
     r = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0, categoria="TRANSFERENCIA",
                                          simulacao={"fraude": False}))
-    assert r.status_code == 200
+    assert r.status_code == 200 and r.json["resultados"][0]["movimento"]["estado"] == "autorizado"
     with _sessoes(app)() as s:
-        m = s.scalars(select(Movimento).where(Movimento.id_transacao == "T-1")).one()
-    assert m.tipo == "transferencia_enviada" and m.contraparte_id is None and m.canal == "simulador"
+        movimentos = s.scalars(select(Movimento).where(Movimento.tipo != "deposito")).all()
+    assert [(m.tipo, m.contraparte_id, m.canal) for m in movimentos] == [("transferencia_enviada", None, "simulador")]
+    assert _saldo(app, conta) == 99_000  # debitado e sem crédito em mais nenhuma conta
+    _saldos_certos(app)
 
 
 def test_canal_api_sem_simulacao_e_uso_registado(app, chave):
@@ -602,3 +639,47 @@ def test_id_de_deposito_nao_colide_com_id_de_transacao(app, chave):
     _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="X-1"))
     r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="X-1")]})
     assert r.status_code == 200 and r.json["resultados"][0]["estado"] == "autorizado"
+
+
+def test_pedidos_sobrepostos_com_o_mesmo_id_so_debitam_uma_vez(app, chave, monkeypatch):
+    """Dois pedidos veem "sem movimento" ao mesmo tempo: o índice único desfaz o segundo, que devolve o primeiro."""
+    from datetime import datetime
+    from detector import api, contas_bancarias
+    _forcar(monkeypatch)
+    conta = _cliente_banco(app, saldo=100_000)
+    with _sessoes(app).begin() as s:  # o outro pedido já gravou T-1 e debitou
+        from detector.banco import ContaBancaria
+        contas_bancarias.debitar(s, s.get(ContaBancaria, conta), "compra", 15_000, "api", "outro",
+                                 datetime(2026, 5, 1, 14, 30), "autorizado", id_transacao="T-1")
+    real, chamadas = api._movimentos_anteriores, []
+
+    def uma_vez_cego(sessoes, contas):
+        chamadas.append(1)
+        return {} if len(chamadas) == 1 else real(sessoes, contas)
+    monkeypatch.setattr(api, "_movimentos_anteriores", uma_vez_cego)
+    r = _api(app, chave, json={"transacoes": [_transacao(1, cliente="B0001", valor=150.0),
+                                              _transacao(2, cliente="B0001", valor=10.0)]})
+    assert r.status_code == 200, r.json
+    res = r.json["resultados"]
+    assert res[0]["duplicada"] is True and res[0]["movimento"]["estado"] == "autorizado"
+    assert res[1]["duplicada"] is False and res[1]["movimento"]["estado"] == "autorizado"
+    assert _saldo(app, conta) == 100_000 - 15_000 - 1_000
+    _saldos_certos(app)
+
+
+def test_depositos_sobrepostos_com_o_mesmo_id_so_creditam_uma_vez(app, chave, monkeypatch):
+    from detector import api
+    conta = _cliente_banco(app, saldo=1_000)
+    real = api._gravar_depositos
+
+    def concorrente(sessoes, depositos):
+        if not getattr(concorrente, "feito", False):  # o outro pedido grava D-1 e o índice único desfaz este
+            concorrente.feito = True
+            real(sessoes, depositos)
+            raise IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed"))
+        return real(sessoes, depositos)
+    monkeypatch.setattr(api, "_gravar_depositos", concorrente)
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito()]})
+    assert r.status_code == 200 and r.json["resultados"][0]["saldo"] == 26_050 / 100
+    assert _saldo(app, conta) == 26_050
+    _saldos_certos(app)
