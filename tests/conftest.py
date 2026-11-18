@@ -40,7 +40,8 @@ def criar_cliente(app, perfil: str | None = "administrador", nome: str | None = 
         nome = nome or f"teste.{perfil}"
         u = contas.obter_por_nome(sessoes, nome) or contas.criar(sessoes, nome, f"Teste {perfil}", perfil, SENHA_TESTE)
         with cliente.session_transaction() as sessao:
-            sessao.update(uid=u.id, versao=u.versao_sessao)
+            from detector.acesso import impressao
+            sessao.update(uid=u.id, versao=u.versao_sessao, conta=impressao(u))
         cliente.utilizador = u
     return cliente
 

@@ -15,7 +15,7 @@ fraude ou falso alarme.
 ## Entrar e sair
 
 - Entre com o nome de utilizador e a senha que o administrador lhe deu. Na primeira entrada terá de escolher uma
-  senha nova (pelo menos 10 caracteres, sem o nome de utilizador).
+  senha nova.
 - Depois de 5 tentativas erradas seguidas, a conta fica bloqueada 15 minutos.
 - A sessão termina sozinha ao fim de 8 horas (configurável). Use **Sair**, no canto superior direito, ao terminar.
 - **Senha**, no mesmo canto, muda a sua senha; as suas outras sessões abertas terminam.

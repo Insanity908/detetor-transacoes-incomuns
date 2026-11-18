@@ -3,6 +3,7 @@ gestão de utilizadores (administrador) e consulta da auditoria (supervisor e ad
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import secrets
 from datetime import date, timedelta
@@ -57,6 +58,17 @@ def exige(perfil_minimo: str):
     return decorador
 
 
+def impressao(u) -> str:
+    """Identifica a conta concreta: o número da conta sozinho podia coincidir com o de outra instalação que use
+    a mesma CHAVE_SECRETA. Inclui o hash da senha (com sal aleatório), por isso também muda com a senha."""
+    texto = f"{u.id}:{u.nome_utilizador}:{u.criado_em.isoformat()}:{u.senha_hash}"
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()[:32]
+
+
+def _guardar_na_sessao(u) -> None:
+    session.update(uid=u.id, versao=u.versao_sessao, conta=impressao(u))
+
+
 def token_csrf() -> str:
     if CAMPO_CSRF not in session:
         session[CAMPO_CSRF] = secrets.token_urlsafe(32)
@@ -102,7 +114,8 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
         uid = session.get("uid")
         if uid is not None:
             u = contas.obter(sessoes, uid)
-            if u is not None and u.ativo and u.versao_sessao == session.get("versao"):
+            if (u is not None and u.ativo and u.versao_sessao == session.get("versao")
+                    and hmac.compare_digest(str(session.get("conta", "")), impressao(u))):
                 g.utilizador = u
             else:  # conta desativada, senha ou perfil mudados: a sessão deixa de valer
                 session.clear()
@@ -165,7 +178,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
         u = resultado.utilizador
         session.clear()  # sessão nova: um identificador antigo não serve depois de entrar
         session.permanent = True
-        session.update(uid=u.id, versao=u.versao_sessao)
+        _guardar_na_sessao(u)
         g.utilizador = u
         auditar("entrada")
         registo.info("Entrada de '%s' (%s)", u.nome_utilizador, u.perfil)
@@ -198,7 +211,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
         if erro:
             return render_template("senha.html", erro=erro, sucesso=False), 400
         auditar("senha_alterada", alvo=u.nome_utilizador)
-        session["versao"] = contas.obter(sessoes, u.id).versao_sessao  # esta sessão continua; as outras terminam
+        _guardar_na_sessao(contas.obter(sessoes, u.id))  # esta sessão continua; as outras terminam
         g.utilizador = contas.obter(sessoes, u.id)
         return render_template("senha.html", erro=None, sucesso=True)
 
@@ -253,7 +266,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
         if mudancas:
             auditar("utilizador_alterado", alvo=alvo.nome_utilizador, detalhe="; ".join(mudancas))
         if alvo.id == utilizador_atual().id:  # o próprio administrador mudou o seu perfil: mantém a sessão
-            session["versao"] = contas.obter(sessoes, alvo.id).versao_sessao
+            _guardar_na_sessao(contas.obter(sessoes, alvo.id))
         return _ficha(contas.obter(sessoes, alvo.id), mensagem="Alterações gravadas." if mudancas else "Nada mudou.")
 
     @app.post("/utilizadores/<int:utilizador_id>/senha")
@@ -266,7 +279,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
             return _ficha(alvo, str(exc), estado=400)
         auditar("senha_redefinida", alvo=alvo.nome_utilizador)
         if alvo.id == utilizador_atual().id:
-            session["versao"] = contas.obter(sessoes, alvo.id).versao_sessao
+            _guardar_na_sessao(contas.obter(sessoes, alvo.id))
         return _ficha(contas.obter(sessoes, alvo.id),
                       mensagem="Senha redefinida. O utilizador terá de a mudar ao entrar.")
 

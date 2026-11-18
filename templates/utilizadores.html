@@ -33,7 +33,7 @@
       {% for p in perfis %}<option value="{{ p }}" {% if valores.perfil == p %}selected{% endif %}>{{ nomes_perfil[p] }}</option>{% endfor %}
     </select>
   </label>
-  <label>Senha temporária <input name="senha" type="password" required minlength="10" autocomplete="new-password"></label>
+  <label>Senha temporária <input name="senha" type="password" required autocomplete="new-password"></label>
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
   <button type="submit" class="principal">Criar utilizador</button>
 </form>

@@ -39,7 +39,7 @@ Na pasta do projeto, faça duplo clique em **`instalar.bat`**. O script:
    - cria a base de dados em `instancia\detetor.db`;
    - gera os dados sintéticos e **treina os modelos** (1 a 2 minutos);
    - **pede os dados do primeiro administrador**: nome de utilizador (por omissão `admin`), nome e senha
-     (pelo menos 10 caracteres; não aparece enquanto escreve).
+     (não aparece enquanto escreve).
 
 No fim aparece `Instalação concluída`. Se algum passo falhar, a mensagem de erro diz qual; veja a secção 8.
 
@@ -85,7 +85,8 @@ Com o sistema ligado, o endereço `http://127.0.0.1:5000/saude` responde com `"e
 | `[ERRO] Python nao encontrado` | Reinstale o Python com a opção "Add python.exe to PATH" marcada e abra uma nova janela. |
 | `E preciso o Python 3.11 ou mais recente` | Instale uma versão mais recente; a antiga pode ficar instalada. |
 | A instalação falha a descarregar dependências | Verifique a ligação à internet (ou o proxy da empresa) e execute o `instalar.bat` de novo. |
-| A janela do `iniciar.bat` fecha logo com um erro de porta | Outro programa usa a porta 5000. Mude `PORTA=` no `.env` (por exemplo 5050). |
+| A janela do `iniciar.bat` fecha logo com um erro de porta | Outro programa usa a porta 5000. Mude `PORTA=` no `.env` (por exemplo 5050 ou 8080). |
+| O navegador mostra `ERR_UNSAFE_PORT` | A porta escolhida é uma das que os navegadores recusam (por exemplo 5060 ou 6000). O sistema já não arranca com elas; escolha outra. |
 | A página diz "Os modelos ainda não foram treinados" | Execute `.venv\Scripts\python gerir.py treinar`. Se o log disser "assinatura não confere", a `CHAVE_SECRETA` mudou: use `gerir.py treinar --forcar`. |
 | "Ainda não existe nenhuma conta" | Execute `.venv\Scripts\python gerir.py criar-admin`. |
 | Conta bloqueada por tentativas falhadas | Espere 15 minutos ou execute `.venv\Scripts\python gerir.py desbloquear <nome>`. |

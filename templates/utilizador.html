@@ -29,7 +29,7 @@
     <p class="ajuda">Para quem esqueceu a senha. A pessoa terá de escolher uma nova ao entrar.</p>
     <form method="post" action="/utilizadores/{{ alvo.id }}/senha" class="pilha">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>Senha temporária <input name="senha" type="password" required minlength="10" autocomplete="new-password"></label>
+      <label>Senha temporária <input name="senha" type="password" required autocomplete="new-password"></label>
       <button type="submit" class="secundario">Redefinir senha</button>
     </form>
   </section>

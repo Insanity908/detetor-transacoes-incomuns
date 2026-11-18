@@ -3,7 +3,7 @@
 {% block cabeca %}{% if auto %}<meta http-equiv="refresh" content="{{ intervalo }}">{% endif %}{% endblock %}
 {% block conteudo %}
 <h1>Alertas</h1>
-<p class="ajuda">Transações com alerta dos ficheiros analisados. Assuma um alerta novo para o investigar e encerre-o
+<p class="ajuda">Transações com alerta, vindas dos ficheiros analisados e da API. Assuma um alerta novo para o investigar e encerre-o
   como <strong>fraude confirmada</strong> ou <strong>falso alarme</strong>.
   {% if not ve_tudo %}Vê os alertas novos e os seus.{% endif %}</p>
 
@@ -47,7 +47,7 @@
       <td><span class="etiqueta nivel-{{ classe_nivel[t.nivel] }}">{{ t.nivel }}</span></td>
       <td>{{ t.cliente }}</td><td>{{ t.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
       <td class="num">{{ t.valor | mt }}</td>
-      <td>{{ (t.motivos | motivos | first) or '—' }}</td>
+      <td>{{ (t.motivos | motivos | first) or 'Combinação de fatores' }}</td>
       <td><span class="estado estado-{{ a.estado }}">{{ nomes_estado[a.estado] }}</span></td>
       <td>{{ a.responsavel.nome if a.responsavel else '—' }}</td>
     </tr>

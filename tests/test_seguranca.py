@@ -214,8 +214,6 @@ def test_administrador_cria_conta_que_tem_de_mudar_a_senha(cliente):
 @pytest.mark.parametrize("dados,erro", [
     (dict(nome_utilizador="ab", nome="X", perfil="analista", senha=SENHA_TESTE), "3 a 50 caracteres"),
     (dict(nome_utilizador="novo", nome="X", perfil="dono", senha=SENHA_TESTE), "Perfil desconhecido"),
-    (dict(nome_utilizador="novo", nome="X", perfil="analista", senha="curta"), "pelo menos 10"),
-    (dict(nome_utilizador="novo", nome="X", perfil="analista", senha="novo-1234567"), "nome de utilizador"),
     (dict(nome_utilizador="teste.administrador", nome="X", perfil="analista", senha=SENHA_TESTE), "Já existe"),
 ])
 def test_criacao_invalida_explica_o_erro(cliente, dados, erro):
@@ -259,12 +257,20 @@ def test_redefinir_senha_obriga_a_mudar(cliente):
 @pytest.mark.parametrize("dados,erro", [
     (dict(senha_atual="errada", senha_nova="nova-senha-boa", confirmacao="nova-senha-boa"), "senha atual"),
     (dict(senha_atual=SENHA_TESTE, senha_nova="nova-senha-boa", confirmacao="outra-senha-x"), "confirmação"),
-    (dict(senha_atual=SENHA_TESTE, senha_nova="curta", confirmacao="curta"), "pelo menos 10"),
-    (dict(senha_atual=SENHA_TESTE, senha_nova=SENHA_TESTE, confirmacao=SENHA_TESTE), "diferente"),
+    (dict(senha_atual=SENHA_TESTE, senha_nova="", confirmacao=""), "Escreva uma senha"),
 ])
 def test_mudar_senha_valida_os_dados(cliente, dados, erro):
     r = cliente.post("/conta/senha", data=dados)
     assert r.status_code == 400 and erro in r.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("senha_nova", ["1", "ana", SENHA_TESTE])
+def test_senha_nao_tem_regras(app, senha_nova):
+    """Sem mínimo de caracteres, pode conter o nome de utilizador e pode repetir a atual."""
+    a = criar_cliente(app, "analista", "ana")
+    r = a.post("/conta/senha", data={"senha_atual": SENHA_TESTE, "senha_nova": senha_nova, "confirmacao": senha_nova})
+    assert r.status_code == 200 and "Senha alterada" in r.get_data(as_text=True)
+    assert contas.confirmar_senha(contas.obter_por_nome(_sessoes(app), "ana"), senha_nova)
 
 
 def test_mudar_senha_termina_as_outras_sessoes(app):
@@ -403,12 +409,12 @@ def test_migracao_0002_desfaz_e_refaz(ambiente_de_teste):
 def test_criar_admin_interativo_pede_de_novo_quando_a_senha_falha(app, monkeypatch, capsys):
     import gerir
     respostas = iter(["Chefe", "Chefe da Equipa"])
-    senhas = iter(["curta", "curta", "uma-senha-forte", "outra-senha-x", "uma-senha-forte", "uma-senha-forte"])
+    senhas = iter(["", "", "uma-senha-forte", "outra-senha-x", "uma-senha-forte", "uma-senha-forte"])
     monkeypatch.setattr("builtins.input", lambda _: next(respostas))
     monkeypatch.setattr(gerir.getpass, "getpass", lambda _: next(senhas))
     gerir.criar_admin_interativo()
     saida = capsys.readouterr().out
-    assert "pelo menos 10" in saida and "não são iguais" in saida and "criado" in saida
+    assert "Escreva uma senha" in saida and "não são iguais" in saida and "criado" in saida
     assert contas.obter_por_nome(_sessoes(app), "chefe").perfil == "administrador"
 
 
@@ -420,3 +426,29 @@ def test_preparar_sem_teclado_nao_falha(app, monkeypatch, capsys):
     monkeypatch.setattr("builtins.input", lambda _: (_ for _ in ()).throw(EOFError))
     gerir.main(["preparar"])
     assert "Nenhuma conta criada" in capsys.readouterr().out
+
+
+def test_sessao_de_outra_instalacao_com_o_mesmo_numero_de_conta_e_recusada(app):
+    """Um cookie válido (mesma CHAVE_SECRETA) com uid e versão iguais, mas de outra conta, não abre sessão."""
+    contas.criar(_sessoes(app), "ana", "Ana", "administrador", SENHA_TESTE)
+    cliente = criar_cliente(app, None)
+    with cliente.session_transaction() as sessao:
+        sessao.update(uid=1, versao=1, conta="impressao-de-outra-conta")
+    assert cliente.get("/").status_code == 302
+    with cliente.session_transaction() as sessao:
+        sessao.update(uid=1, versao=1)  # cookies antigos, sem impressão: também deixam de valer
+    assert cliente.get("/").status_code == 302
+
+
+def test_mudar_a_propria_senha_mantem_a_sessao(app):
+    a = criar_cliente(app, "analista", "ana")
+    a.post("/conta/senha", data={"senha_atual": SENHA_TESTE, "senha_nova": "nova-senha-boa", "confirmacao": "nova-senha-boa"})
+    assert a.get("/").status_code == 200
+
+
+@pytest.mark.parametrize("porta", ["5060", "6000", "22"])
+def test_porta_recusada_pelos_navegadores(monkeypatch, porta):
+    from detector.configuracao import ler_configuracao
+    monkeypatch.setenv("PORTA", porta)
+    with pytest.raises(ValueError, match="ERR_UNSAFE_PORT"):
+        ler_configuracao(ficheiro_env=None)

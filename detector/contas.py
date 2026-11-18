@@ -12,7 +12,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .banco import PERFIS, Utilizador
 
 NOMES_PERFIL = {"analista": "Analista", "supervisor": "Supervisor", "administrador": "Administrador"}
-SENHA_MINIMA = 10
 MAX_TENTATIVAS = 5
 TEMPO_BLOQUEIO = timedelta(minutes=15)
 PADRAO_NOME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,49}$")
@@ -44,10 +43,8 @@ def validar_nome(nome: str) -> str:
 
 
 def validar_senha(senha: str, nome_utilizador: str = "") -> None:
-    if len(senha or "") < SENHA_MINIMA:
-        raise ValueError(f"A senha deve ter pelo menos {SENHA_MINIMA} caracteres.")
-    if nome_utilizador and nome_utilizador.lower() in senha.lower():
-        raise ValueError("A senha não pode conter o nome de utilizador.")
+    if not senha:
+        raise ValueError("Escreva uma senha.")
 
 
 def validar_perfil(perfil: str) -> str:
@@ -135,8 +132,6 @@ def definir_senha(sessoes: sessionmaker, utilizador_id: int, senha: str, trocar_
         if u is None:
             raise ValueError("Utilizador não encontrado.")
         validar_senha(senha, u.nome_utilizador)
-        if check_password_hash(u.senha_hash, senha):
-            raise ValueError("A senha nova tem de ser diferente da atual.")
         u.senha_hash = generate_password_hash(senha)
         u.trocar_senha = trocar_senha
         u.tentativas_falhadas, u.bloqueado_ate = 0, None

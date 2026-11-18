@@ -74,12 +74,11 @@ def criar_admin(nome_utilizador: str, nome: str, senha: str) -> None:
 
 
 def criar_admin_interativo() -> None:
-    from detector.contas import SENHA_MINIMA
     print("Criar a conta de administrador.")
     nome_utilizador = input("Nome de utilizador [admin]: ").strip() or "admin"
     nome = input("Nome completo [Administrador]: ").strip() or "Administrador"
     while True:
-        senha = getpass.getpass(f"Senha (mínimo {SENHA_MINIMA} caracteres, não aparece ao escrever): ")
+        senha = getpass.getpass("Senha (não aparece ao escrever): ")
         if senha != getpass.getpass("Repita a senha: "):
             print("As senhas não são iguais. Tente de novo.")
             continue

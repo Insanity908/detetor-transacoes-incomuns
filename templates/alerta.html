@@ -18,9 +18,12 @@
         <div><dt>Anomalia</dt><dd>{{ t.anomalia | nota }}<small>/100</small></dd></div>
       </dl>
       {% set lista_motivos = t.motivos | motivos %}
-      {% if lista_motivos %}
       <h3>Porque parece estranha</h3>
+      {% if lista_motivos %}
       <ul class="motivos">{% for m in lista_motivos %}<li>{{ m }}</li>{% endfor %}</ul>
+      {% else %}
+      <p>Nenhum fator isolado chega para o explicar: o classificador marcou-a pela combinação de vários
+        (por exemplo, a primeira compra de uma série rápida). Veja os outros alertas deste cliente.</p>
       {% endif %}
     </div>
     <dl class="ficha">
@@ -91,7 +94,7 @@
 
     <h3>Histórico e comentários</h3>
     <ol class="historico">
-      <li><span class="quando">{{ a.criado_em.strftime('%d/%m/%Y %H:%M') }}</span> Alerta criado pela análise do ficheiro.</li>
+      <li><span class="quando">{{ a.criado_em.strftime('%d/%m/%Y %H:%M') }}</span> Alerta criado quando a transação foi avaliada.</li>
       {% for e in historico %}
       <li class="evento-{{ e.tipo }}"><span class="quando">{{ e.momento.strftime('%d/%m/%Y %H:%M') }}</span>
         <strong>{{ e.nome_utilizador }}</strong>
