@@ -77,14 +77,5 @@
   <button type="submit" class="principal">Gravar alterações</button>
 </form>
 <p><a href="/balcao/clientes">Voltar à lista</a></p>
-<script>
-  document.querySelectorAll('form[data-envio-unico]').forEach(function (f) {
-    f.addEventListener('submit', function (e) {
-      if (f.dataset.enviado) { e.preventDefault(); return; }
-      f.dataset.enviado = '1';
-      var b = f.querySelector('button[type=submit]');
-      if (b) { setTimeout(function () { b.disabled = true; }, 0); }
-    });
-  });
-</script>
+<script src="{{ url_for('static', filename='envio_unico.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base_cliente.html" %}
+{% block conteudo %}
+<h1>Transferir</h1>
+<p class="ajuda">Conta {{ conta.numero }} · disponível {{ conta.disponivel|mtc }}.</p>
+{% if resultado %}
+<p class="aviso aviso-{{ 'sucesso' if resultado.estado == 'autorizado' else ('retido' if resultado.estado == 'retido' else 'erro') }}" role="status">
+  {{ resultado.texto }}{% if resultado.movimento_id %} <a href="/cliente/movimentos/{{ resultado.movimento_id }}">Ver movimento</a>{% endif %}
+</p>
+{% endif %}
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+<form method="post" action="/cliente/transferir" class="pilha" data-envio-unico>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Conta de destino <input name="conta_destino" required maxlength="20" autocomplete="off" inputmode="numeric" value="{{ valores.get('conta_destino', '') if not resultado else '' }}"></label>
+  <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="500,00" value="{{ valores.get('valor', '') if not resultado else '' }}"></label>
+  <label>Descrição (opcional) <input name="descricao" maxlength="140" autocomplete="off" value="{{ valores.get('descricao', '') if not resultado else '' }}"></label>
+  {% if demonstracao %}
+  {% set cidade_sel = valores.get('cidade') or cliente_atual.cidade %}
+  {% set pais_sel = valores.get('pais') or 'MZ' %}
+  <fieldset>
+    <legend>A partir de (modo demonstração)</legend>
+    <label>Cidade
+      <select name="cidade">
+        {% for x in cidades %}<option value="{{ x }}" {% if cidade_sel == x %}selected{% endif %}>{{ x|capitalize }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>País
+      <select name="pais">
+        {% for p in paises %}<option value="{{ p }}" {% if pais_sel == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select>
+    </label>
+  </fieldset>
+  {% endif %}
+  <button type="submit" class="principal">Transferir</button>
+</form>
+<p><a href="/cliente/">Voltar ao início</a></p>
+<script src="{{ url_for('static', filename='envio_unico.js') }}"></script>
+{% endblock %}

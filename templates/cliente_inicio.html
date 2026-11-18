@@ -1,5 +1,30 @@
 {% extends "base_cliente.html" %}
 {% block conteudo %}
 <h1>Olá, {{ cliente_atual.nome }}</h1>
-<p class="ajuda">Conta {{ cliente_atual.conta.numero }}.</p>
+<p class="ajuda">Conta {{ conta.numero }}.</p>
+<table class="estreita">
+  <tr><th>Saldo</th><td class="num">{{ conta.saldo|mtc }}</td></tr>
+  <tr><th>Disponível</th><td class="num">{{ conta.disponivel|mtc }}</td></tr>
+  <tr><th>Em verificação</th><td class="num">{{ conta.saldo_retido|mtc }}</td></tr>
+</table>
+<p><a href="/cliente/transferir">Fazer uma transferência</a></p>
+
+<h2 class="separado">Últimos movimentos</h2>
+{% if movimentos %}
+<div class="rolagem"><table>
+  <thead><tr><th>Data</th><th>Tipo</th><th>Estado</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead>
+  <tbody>
+  {% for m in movimentos %}
+    <tr>
+      <td>{{ m.momento.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>{{ nomes_tipo_cliente.get(m.tipo, m.tipo) }}{% if m.contraparte_id and numeros.get(m.contraparte_id) %} <small>{{ 'de' if m.tipo == 'transferencia_recebida' else 'para' }} {{ numeros[m.contraparte_id] }}</small>{% endif %}</td>
+      <td>{{ estado_texto(m.tipo, m.estado, m.motivo) }}</td>
+      <td>{{ m.descricao or '' }}</td>
+      <td class="num">{{ m.valor|mtc }}</td>
+      <td><a href="/cliente/movimentos/{{ m.id }}">Ver</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<p class="ajuda">Ainda sem movimentos.</p>{% endif %}
 {% endblock %}

@@ -180,3 +180,219 @@ def test_area_do_cliente_funciona_sem_modelos(tmp_path, cli_sem_modelos=None):
     app = criar_app(tmp_path / "vazia")
     c = _browser(app)
     assert c.get("/cliente/entrar").status_code == 200
+
+
+# ------------------------------------------------------------ Tarefa 16: saldo, movimentos e transferências
+from pathlib import Path
+
+from detector import autorizacao
+from detector.auditoria import ACOES
+from detector.configuracao import ler_configuracao
+
+RAIZ = Path(__file__).resolve().parent.parent
+NOVA_SENHA = "senha-nova-2"
+DADOS_ANA = dict(nome="Ana Maria Sitoe", data_nascimento="1990-05-10", tipo_documento="NUIT",
+                 numero_documento="123456789", telefone="841234567", email="", cidade="MAPUTO",
+                 morada="Av. 24 de Julho 100")
+DADOS_BRUNO = dict(DADOS_ANA, nome="Bruno Matsinhe Secreto", numero_documento="987654321", cidade="BEIRA")
+
+
+def _forcar_nivel(monkeypatch, nivel, risco, capturar=None):
+    def falso(artefatos, df, historico_extra=None, cortes=None):
+        if capturar is not None:
+            capturar.extend(df.to_dict("records"))
+        r = df.copy().reset_index(drop=True)
+        r["risco"], r["anomalia"], r["nivel"] = risco, 10.0, nivel
+        r["motivos"] = [["teste"]] * len(r)
+        r["historico_curto"] = False
+        return r
+    monkeypatch.setattr(autorizacao, "avaliar_transacoes", falso)
+
+
+@pytest.fixture()
+def outro(sessoes):
+    return clientes.criar(sessoes, clientes.validar(DADOS_BRUNO), "teste")
+
+
+def _sessao(app, cli):
+    c = _browser(app)
+    _entrar(c, cli.codigo)
+    c.post("/cliente/senha", data={"senha_atual": SENHA, "senha_nova": NOVA_SENHA, "confirmacao": NOVA_SENHA})
+    return c
+
+
+def _saldos(sessoes, *clis):
+    from detector.banco import ContaBancaria
+    with sessoes() as s:
+        contas = [s.get(ContaBancaria, c.conta.id) for c in clis]
+        return [(x.saldo, x.saldo_retido) for x in contas]
+
+
+def _depositar(sessoes, cli, centavos):
+    contas_bancarias.depositar(sessoes, cli.conta.id, centavos, "balcao", "teste")
+
+
+def test_inicio_mostra_saldos_e_movimentos_com_estado(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    c = _sessao(app, cli)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "100,00", "descricao": "renda"})
+    _forcar_nivel(monkeypatch, "Alto risco", 90.0)
+    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "200,00"})
+    c.post("/cliente/transferir", data={"conta_destino": cli.conta.numero, "valor": "1,00"})
+    html = c.get("/cliente/").get_data(as_text=True)
+    assert "Concluída" in html and "Em verificação" in html and "Recusada — A conta de destino não pode" in html
+    assert "900,00 MT" in html and "700,00 MT" in html and "200,00 MT" in html  # saldo, disponível, em verificação
+    assert cli.conta.numero in html
+
+
+def test_movimento_recebido_mostra_numero_e_nunca_o_nome(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00"})
+    acesso_cliente.criar_ou_redefinir(sessoes, outro.id, SENHA)
+    html = _sessao(app, outro).get("/cliente/").get_data(as_text=True)
+    assert "Recebida" in html and cli.conta.numero in html and "Ana Maria" not in html
+    assert "Bruno" not in _sessao(app, cli).get("/cliente/").get_data(as_text=True)
+
+
+def test_transferencia_normal_conclui_e_move_saldos(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,50"})
+    assert r.status_code == 200 and "Concluída" in r.get_data(as_text=True)
+    assert _saldos(sessoes, cli, outro) == [(74_950, 0), (25_050, 0)]
+
+
+def test_transferencia_retida_fica_em_verificacao(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Alto risco", 90.0)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,00"})
+    assert "Em verificação" in r.get_data(as_text=True)
+    assert _saldos(sessoes, cli, outro) == [(100_000, 25_000), (0, 0)]
+
+
+@pytest.mark.parametrize("destino,trecho", [("PROPRIA", "própria conta"), ("000000000", "não encontrada")])
+def test_destino_proprio_ou_inexistente_e_recusado(app, sessoes, cli, acesso, monkeypatch, destino, trecho):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    numero = cli.conta.numero if destino == "PROPRIA" else destino
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": numero, "valor": "10,00"})
+    html = r.get_data(as_text=True)
+    assert "Recusada" in html and trecho in html
+    assert _saldos(sessoes, cli) == [(100_000, 0)]
+
+
+def test_valor_invalido_da_400_com_mensagem(app, cli, outro, acesso, monkeypatch):
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "abc"})
+    assert r.status_code == 400 and 'role="alert"' in r.get_data(as_text=True)
+
+
+def test_movimento_proprio_abre_e_alheio_ou_inexistente_da_404_igual(app, sessoes, cli, outro, acesso):
+    _depositar(sessoes, cli, 100_000)
+    _depositar(sessoes, outro, 5_000)
+    c = _sessao(app, cli)
+    proprio = contas_bancarias.extrato(sessoes, cli.conta.id)[0].id
+    alheio = contas_bancarias.extrato(sessoes, outro.conta.id)[0].id
+    assert c.get(f"/cliente/movimentos/{proprio}").status_code == 200
+    a, b = c.get(f"/cliente/movimentos/{alheio}"), c.get("/cliente/movimentos/99999")
+    assert a.status_code == b.status_code == 404 and a.get_data() == b.get_data()
+    assert "Banco Demonstração" in a.get_data(as_text=True)
+
+
+def test_transferir_sem_modelos_da_503(tmp_path):
+    app = criar_app(tmp_path / "vazia")
+    s = app.config["SESSOES"]
+    c0 = clientes.criar(s, clientes.validar(DADOS_ANA), "teste")
+    acesso_cliente.criar_ou_redefinir(s, c0.id, SENHA)
+    c = _sessao(app, c0)
+    assert c.get("/cliente/transferir").status_code == 200
+    r = c.post("/cliente/transferir", data={"conta_destino": "1", "valor": "1,00"})
+    assert r.status_code == 503 and "modelos" in r.get_data(as_text=True)
+
+
+def test_modo_demonstracao_mostra_e_usa_a_partir_de(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    visto = []
+    _forcar_nivel(monkeypatch, "Normal", 5.0, visto)
+    c = _sessao(app, cli)
+    html = c.get("/cliente/transferir").get_data(as_text=True)
+    assert 'name="cidade"' in html and 'name="pais"' in html and "data-envio-unico" in html
+    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00",
+                                        "cidade": "TETE", "pais": "NG"})
+    assert (visto[0]["cidade"], visto[0]["pais"]) == ("TETE", "NG")
+
+
+def test_sem_modo_demonstracao_campos_ausentes_e_ignorados(pasta_pequena, monkeypatch):
+    monkeypatch.setenv("MODO_DEMONSTRACAO", "0")
+    app = criar_app(pasta_pequena)
+    s = app.config["SESSOES"]
+    a = clientes.criar(s, clientes.validar(DADOS_ANA), "teste")
+    b = clientes.criar(s, clientes.validar(DADOS_BRUNO), "teste")
+    acesso_cliente.criar_ou_redefinir(s, a.id, SENHA)
+    _depositar(s, a, 100_000)
+    visto = []
+    _forcar_nivel(monkeypatch, "Normal", 5.0, visto)
+    c = _sessao(app, a)
+    html = c.get("/cliente/transferir").get_data(as_text=True)
+    assert 'name="cidade"' not in html and 'name="pais"' not in html
+    c.post("/cliente/transferir", data={"conta_destino": b.conta.numero, "valor": "10,00", "cidade": "TETE",
+                                        "pais": "NG"})
+    assert (visto[0]["cidade"], visto[0]["pais"]) == ("MAPUTO", "MZ")
+
+
+def test_transferencia_e_auditada(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00"})
+    with sessoes() as s:
+        e = s.scalars(select(EventoAuditoria).where(EventoAuditoria.acao == "transferencia_cliente")).one()
+    assert e.nome_utilizador == f"cliente:{cli.codigo}" and e.alvo == cli.codigo
+    assert outro.conta.numero in e.detalhe and "1000" in e.detalhe and "autorizado" in e.detalhe
+    assert "transferencia_cliente" in ACOES
+
+
+def test_erros_do_cliente_usam_a_marca_do_cliente(app, cli, acesso):
+    c = _sessao(app, cli)
+    csrf = c.post("/cliente/transferir", data={"csrf_token": "errado", "valor": "1"})
+    nao = c.get("/cliente/movimentos/99999")
+    for r, estado in ((csrf, 400), (nao, 404)):
+        assert r.status_code == estado and "Detetor de Fraudes" not in r.get_data(as_text=True)
+        assert "Banco Demonstração" in r.get_data(as_text=True)
+
+
+def test_erro_500_do_cliente_usa_a_marca_do_cliente(app, cli, acesso, monkeypatch):
+    c = _sessao(app, cli)
+    monkeypatch.setattr("detector.web_cliente.contas_bancarias.extrato", lambda *a, **k: 1 / 0)
+    r = c.get("/cliente/")
+    assert r.status_code == 500 and "Detetor de Fraudes" not in r.get_data(as_text=True)
+    assert "Banco Demonstração" in r.get_data(as_text=True)
+
+
+def test_erro_da_equipa_mantem_a_marca_da_equipa(app):
+    c = criar_cliente(app, "administrador")
+    r = c.post("/utilizadores", data={"csrf_token": "errado"})
+    assert r.status_code == 400 and "Banco Demonstração" not in r.get_data(as_text=True)
+
+
+def test_envio_unico_partilhado_e_reativa_no_pageshow():
+    js = (RAIZ / "static" / "envio_unico.js").read_text(encoding="utf-8")
+    assert "pageshow" in js and "persisted" in js and "disabled = false" in js
+    for t in ("balcao_cliente.html", "cliente_transferir.html"):
+        texto = (RAIZ / "templates" / t).read_text(encoding="utf-8")
+        assert "envio_unico.js" in texto and "dataset.enviado" not in texto
+
+
+def test_modo_demonstracao_na_configuracao(monkeypatch):
+    for nome in ("MODO_DEMONSTRACAO", "AMBIENTE"):
+        monkeypatch.delenv(nome, raising=False)
+    assert ler_configuracao(None).modo_demonstracao is True
+    monkeypatch.setenv("AMBIENTE", "producao")
+    monkeypatch.setenv("CHAVE_SECRETA", "x" * 40)
+    assert ler_configuracao(None).modo_demonstracao is False
+    monkeypatch.setenv("MODO_DEMONSTRACAO", "sim")
+    assert ler_configuracao(None).modo_demonstracao is True
+    monkeypatch.setenv("AMBIENTE", "desenvolvimento")
+    monkeypatch.setenv("MODO_DEMONSTRACAO", "não")
+    assert ler_configuracao(None).modo_demonstracao is False

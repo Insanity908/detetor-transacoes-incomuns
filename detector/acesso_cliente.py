@@ -16,7 +16,7 @@ from .banco import AcessoCliente, Cliente
 from .contas import MAX_TENTATIVAS, TEMPO_BLOQUEIO, validar_senha
 
 CHAVES_SESSAO = ("cliente_id", "cliente_versao", "cliente_conta")
-ENDPOINTS = frozenset({"cliente_inicio", "cliente_entrar", "cliente_entrar_post", "cliente_sair", "cliente_senha",
+ENDPOINTS = frozenset({"cliente_entrar", "cliente_entrar_post", "cliente_sair", "cliente_senha",
                        "cliente_senha_post"})
 PUBLICOS = frozenset({"cliente_entrar", "cliente_entrar_post"})
 LIVRES_DURANTE_TROCA = frozenset({"cliente_senha", "cliente_senha_post", "cliente_sair"})
@@ -160,10 +160,6 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger) -> None:
 
     def _pagina_entrada(erro=None, codigo="", estado=200):
         return render_template("cliente_entrar.html", erro=erro, codigo=codigo), estado
-
-    @app.get("/cliente/")
-    def cliente_inicio():
-        return render_template("cliente_inicio.html")
 
     @app.get("/cliente/entrar")
     def cliente_entrar():

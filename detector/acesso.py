@@ -79,6 +79,12 @@ def _negado():
                            mensagem="O seu perfil não dá acesso a esta página."), 403
 
 
+def pagina_erro(titulo: str | None = None, mensagem: str | None = None, estado: int = 500):
+    """Página de erro com a marca certa: a do cliente nas páginas /cliente/, a da equipa nas restantes."""
+    modelo = "erro_cliente.html" if e_area_cliente(request.path) else "erro.html"
+    return render_template(modelo, titulo=titulo, mensagem=mensagem), estado
+
+
 def impressao(u) -> str:
     """Identifica a conta concreta: o número da conta sozinho podia coincidir com o de outra instalação que use
     a mesma CHAVE_SECRETA. Inclui o hash da senha (com sal aleatório), por isso também muda com a senha."""
@@ -169,8 +175,8 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
         esperado = session.get(CAMPO_CSRF, "")
         if not esperado or not hmac.compare_digest(enviado, esperado):
             registo.warning("Pedido %s %s recusado: token CSRF em falta ou inválido", request.method, request.path)
-            return render_template("erro.html", titulo="O formulário expirou",
-                                   mensagem="Por segurança, o pedido foi recusado. Recarregue a página e tente de novo."), 400
+            return pagina_erro("O formulário expirou",
+                               "Por segurança, o pedido foi recusado. Recarregue a página e tente de novo.", 400)
         return None
 
     @app.after_request

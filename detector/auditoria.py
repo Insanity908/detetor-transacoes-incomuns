@@ -52,6 +52,7 @@ ACOES = {
     "acesso_cliente_bloqueado": "Acesso de cliente bloqueado por tentativas falhadas",
     "saida_cliente": "Cliente saiu da área do cliente",
     "senha_cliente_alterada": "Cliente alterou a própria senha",
+    "transferencia_cliente": "Cliente pediu uma transferência",
 }
 POR_PAGINA = 50
 

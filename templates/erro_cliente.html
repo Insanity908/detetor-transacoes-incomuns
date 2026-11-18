@@ -1,0 +1,11 @@
+{% extends "base_cliente.html" %}
+{% block conteudo %}
+{% if titulo %}
+<h1>{{ titulo }}</h1>
+<p>{{ mensagem }}</p>
+{% else %}
+<h1>Ocorreu um erro inesperado</h1>
+<p>O pedido não pôde ser concluído. Tente de novo; se o problema continuar, dirija-se ao balcão.</p>
+{% endif %}
+<p><a href="/cliente/">Voltar ao início</a></p>
+{% endblock %}

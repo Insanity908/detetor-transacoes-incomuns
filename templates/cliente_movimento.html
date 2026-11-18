@@ -1,0 +1,18 @@
+{% extends "base_cliente.html" %}
+{% block conteudo %}
+<h1>{{ nomes_tipo_cliente.get(m.tipo, m.tipo) }}</h1>
+<table class="estreita">
+  <tr><th>Estado</th><td>{{ estado_texto(m.tipo, m.estado, m.motivo) }}</td></tr>
+  <tr><th>Valor</th><td class="num">{{ m.valor|mtc }}</td></tr>
+  <tr><th>Data</th><td>{{ m.momento.strftime('%d/%m/%Y %H:%M') }}</td></tr>
+  {% if m.contraparte_id and numeros.get(m.contraparte_id) %}
+  <tr><th>{{ 'De' if m.tipo == 'transferencia_recebida' else 'Para' }}</th><td>conta {{ numeros[m.contraparte_id] }}</td></tr>
+  {% endif %}
+  {% if m.descricao %}<tr><th>Descrição</th><td>{{ m.descricao }}</td></tr>{% endif %}
+  {% if m.saldo_apos is not none %}<tr><th>Saldo após</th><td class="num">{{ m.saldo_apos|mtc }}</td></tr>{% endif %}
+</table>
+{% if m.estado == 'retido' %}
+<p class="ajuda">Esta operação está em verificação pela equipa do banco. O valor fica reservado até haver uma decisão.</p>
+{% endif %}
+<p><a href="/cliente/">Voltar ao início</a></p>
+{% endblock %}

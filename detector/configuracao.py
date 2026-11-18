@@ -38,6 +38,7 @@ class Configuracao:
     url_publica: str = ""
     pasta_envios: Path = RAIZ / "instancia" / "envios"  # ficheiros à espera do processamento em segundo plano
     linhas_segundo_plano: int = 2000  # a partir daqui, o ficheiro é analisado em segundo plano
+    modo_demonstracao: bool = True  # área do cliente: campo "a partir de" na transferência (só para apresentações)
 
     @property
     def email_ativo(self) -> bool:
@@ -155,4 +156,5 @@ def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
         url_publica=os.environ.get("URL_PUBLICA", "").strip().rstrip("/"),
         pasta_envios=_caminho(os.environ.get("PASTA_ENVIOS", "instancia/envios")),
         linhas_segundo_plano=_inteiro("LINHAS_SEGUNDO_PLANO", 2000, 1, 10_000_000),
+        modo_demonstracao=_booleano("MODO_DEMONSTRACAO", ambiente != "producao"),
     )
