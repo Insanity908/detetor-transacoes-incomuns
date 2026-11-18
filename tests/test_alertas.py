@@ -352,7 +352,6 @@ def test_configuracao_de_email_invalida(monkeypatch, nome, valor):
 # ------------------------------------------------------------ migração
 def test_migracao_0003_poe_os_alertas_antigos_na_fila(ambiente_de_teste):
     from alembic import command
-    from sqlalchemy import text
     from detector.banco import configuracao_alembic, criar_motor, migrar
     url = "sqlite:///" + (ambiente_de_teste / "antigo.db").as_posix()
     command.upgrade(configuracao_alembic(url), "0002")
@@ -469,6 +468,30 @@ def test_reabrir_nao_mexe_no_movimento(app, artefatos_pequenos, monkeypatch):
     assert _alerta(app, i).estado == "em_analise"
     assert _movimento(app, m) == ("autorizado", None)
     assert _saldos(app, o) == [(75000, 0)]
+
+
+def test_decidir_de_novo_depois_de_reabrir_nao_mexe_no_movimento(app, artefatos_pequenos, monkeypatch):
+    from detector import contas_bancarias
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    sup, _ = _supervisor_decide(app, i, "falso_alarme")
+    _acao(sup, i, "reabrir", texto="Rever esta decisão.")
+    _acao(sup, i, "decidir", decisao="fraude", texto="Afinal é fraude.")
+    assert _alerta(app, i).estado == "fraude"
+    assert _movimento(app, m) == ("autorizado", None)
+    assert _saldos(app, o) == [(75000, 0)]
+    assert contas_bancarias.verificar_saldos(_sessoes(app)) == []
+    acoes = _acoes(app, utilizador="sup")
+    assert sum(a[1] in ("movimento_executado", "movimento_cancelado") for a in acoes) == 1
+
+
+def test_dados_banco_sem_conta_ou_cliente_esconde_o_bloco(app, artefatos_pequenos, monkeypatch):
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    alerta = _alerta(app, i)
+    assert alertas.dados_banco(_sessoes(app), alerta) is not None
+    from detector import alertas as al
+    monkeypatch.setattr(al.contas_bancarias, "movimento_da_transacao",
+                        lambda s, t: type("M", (), {"conta_id": 999999})())
+    assert alertas.dados_banco(_sessoes(app), alerta) is None
 
 
 def test_alerta_de_ficheiro_sem_movimento_decide_na_mesma(app):

@@ -135,6 +135,8 @@ def dados_banco(sessoes: sessionmaker, alerta: Alerta) -> dict | None:
         if movimento is None:
             return None
         conta = sessao.get(ContaBancaria, movimento.conta_id)
+        if conta is None or conta.cliente is None:
+            return None
         return {"titular": conta.cliente.nome, "codigo": conta.cliente.codigo, "conta": conta.numero,
                 "disponivel": conta.disponivel, "tipo": movimento.tipo, "valor": movimento.valor,
                 "estado": movimento.estado, "motivo": movimento.motivo}
