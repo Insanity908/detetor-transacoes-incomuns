@@ -82,7 +82,7 @@ def test_mudar_senha_e_entrar_na_area(app, sessoes, cli, acesso):
     assert r.status_code == 400
     r = c.post("/cliente/senha", data={"senha_atual": SENHA, "senha_nova": "nova", "confirmacao": "nova"})
     assert r.status_code == 200
-    assert c.get("/cliente/").status_code == 200
+    assert c.get("/cliente/senha").status_code == 200  # ainda autenticado como cliente
     out = _browser(app)
     assert _entrar(out, cli.codigo, "nova").headers["Location"].endswith("/cliente/")
 
@@ -141,7 +141,7 @@ def test_redefinir_termina_a_sessao_aberta(app, sessoes, cli, acesso):
     c = _browser(app)
     _entrar(c, cli.codigo)
     c.post("/cliente/senha", data={"senha_atual": SENHA, "senha_nova": "n", "confirmacao": "n"})
-    assert c.get("/cliente/").status_code == 200
+    assert c.get("/cliente/senha").status_code == 200  # ainda autenticado como cliente
     acesso_cliente.criar_ou_redefinir(sessoes, cli.id, "outra")
     r = c.get("/cliente/")
     assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/entrar")
@@ -167,13 +167,46 @@ def test_sair_limpa_so_a_sessao_do_cliente(app, sessoes, cli, acesso):
     assert ("saida_cliente", f"cliente:{cli.codigo}", None, cli.codigo) in _acoes(sessoes)
 
 
-def test_entrada_do_cliente_roda_o_csrf_e_mantem_a_equipa(app, cli, acesso):
+def test_entrada_do_cliente_mantem_o_csrf_e_a_equipa(app, cli, acesso):
+    """O token CSRF é partilhado: rodá-lo na entrada do cliente estragava os formulários da equipa abertos."""
     c = criar_cliente(app, "administrador")
     with c.session_transaction() as s:
         s["csrf_token"] = "antigo"
     _entrar(c, cli.codigo)
     with c.session_transaction() as s:
-        assert s.get("csrf_token") != "antigo" and "uid" in s and s["cliente_id"] == cli.id
+        assert s.get("csrf_token") == "antigo" and "uid" in s and s["cliente_id"] == cli.id
+    assert "expirou" not in c.post("/utilizadores", data={"csrf_token": "antigo"}).get_data(as_text=True)
+
+
+def test_saida_da_equipa_mantem_a_sessao_do_cliente(app, cli, acesso):
+    c = criar_cliente(app, "administrador")
+    _entrar(c, cli.codigo)
+    c.post("/sair")
+    with c.session_transaction() as s:
+        assert "uid" not in s and "versao" not in s and "conta" not in s and s["cliente_id"] == cli.id
+    assert c.get("/cliente/senha").status_code == 200  # ainda autenticado como cliente
+
+
+def test_entrada_da_equipa_mantem_a_sessao_do_cliente(app, cli, acesso, sessoes):
+    from detector import contas
+    from tests.conftest import SENHA_TESTE
+    contas.criar(sessoes, "chefe", "Chefe", "administrador", SENHA_TESTE)
+    c = _browser(app)
+    _entrar(c, cli.codigo)
+    r = c.post("/entrar", data={"nome_utilizador": "chefe", "senha": SENHA_TESTE})
+    assert r.status_code == 302
+    with c.session_transaction() as s:
+        assert "uid" in s and s["cliente_id"] == cli.id
+
+
+def test_saida_do_cliente_mantem_o_csrf_da_equipa(app, cli, acesso):
+    c = criar_cliente(app, "administrador")
+    with c.session_transaction() as s:
+        s["csrf_token"] = "antigo"
+    _entrar(c, cli.codigo)
+    c.post("/cliente/sair")
+    with c.session_transaction() as s:
+        assert s.get("csrf_token") == "antigo"
 
 
 def test_area_do_cliente_funciona_sem_modelos(tmp_path, cli_sem_modelos=None):

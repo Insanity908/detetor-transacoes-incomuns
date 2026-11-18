@@ -180,7 +180,6 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger) -> None:
                                 request.remote_addr)
             return _pagina_entrada(str(exc), codigo, 401)
         _limpar()  # sessão nova só do cliente: não apaga a sessão da equipa no mesmo navegador
-        session.pop(acesso.CAMPO_CSRF, None)
         session.permanent = True
         a = obter_acesso(sessoes, c.id)
         _guardar(c, a)
@@ -191,7 +190,6 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger) -> None:
     def cliente_sair():
         _auditar("saida_cliente", g.cliente.codigo)
         _limpar()
-        session.pop(acesso.CAMPO_CSRF, None)
         return redirect(url_for("cliente_entrar"))
 
     @app.get("/cliente/senha")

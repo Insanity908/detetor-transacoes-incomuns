@@ -97,6 +97,15 @@ def e_area_cliente(caminho: str) -> bool:
     return caminho == "/cliente" or caminho.startswith("/cliente/")
 
 
+CHAVES_SESSAO = ("uid", "versao", "conta")  # só estas são da equipa; o resto (CSRF, área do cliente) é partilhado
+
+
+def _limpar_sessao() -> None:
+    """Termina só a sessão da equipa: a do cliente e o token CSRF (partilhado) no mesmo navegador ficam."""
+    for chave in CHAVES_SESSAO:
+        session.pop(chave, None)
+
+
 def _guardar_na_sessao(u) -> None:
     session.update(uid=u.id, versao=u.versao_sessao, conta=impressao(u))
 
@@ -152,7 +161,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
                     and hmac.compare_digest(str(session.get("conta", "")), impressao(u))):
                 g.utilizador = u
             else:  # conta desativada, senha ou perfil mudados: a sessão deixa de valer
-                session.clear()
+                _limpar_sessao()
         if request.endpoint in PUBLICOS:
             return None
         if g.utilizador is None:
@@ -215,7 +224,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
                 registo.warning("Conta '%s' bloqueada por tentativas falhadas (IP %s)", nome, request.remote_addr)
             return _pagina_entrada(MENSAGENS_ENTRADA[resultado.motivo], nome, 401)
         u = resultado.utilizador
-        session.clear()  # sessão nova: um identificador antigo não serve depois de entrar
+        _limpar_sessao()  # sessão da equipa nova: um identificador antigo não serve depois de entrar
         session.permanent = True
         _guardar_na_sessao(u)
         g.utilizador = u
@@ -226,7 +235,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
     @app.post("/sair")
     def sair():
         auditar("saida")
-        session.clear()
+        _limpar_sessao()
         return redirect(url_for("entrar"))
 
     @app.get("/conta/senha")
