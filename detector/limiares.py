@@ -24,11 +24,14 @@ CORTES_COMPARADOS = (30, 40, 50, 60, 70)
 class Cortes:
     risco: float = 50.0  # risco >= corte: "Alto risco"
     anomalia: float = 50.0  # anomalia >= corte (com histórico): "Atenção"
+    recusa: float = 95.0  # risco >= corte: o banco recusa a operação sem esperar por análise
 
     def __post_init__(self):
         for nome, valor in asdict(self).items():
             if not MINIMO <= float(valor) <= MAXIMO:
                 raise ValueError(f"O limite de {nome} tem de estar entre {MINIMO} e {MAXIMO}.")
+        if float(self.recusa) < float(self.risco):
+            raise ValueError("O limite de recusa tem de ser maior ou igual ao de alto risco.")
 
     @property
     def padrao(self) -> bool:

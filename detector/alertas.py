@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .banco import ESTADOS_ABERTOS, Alerta, EventoAlerta, TransacaoAvaliada, Utilizador
 
 NOMES_ESTADO = {"novo": "Novo", "em_analise": "Em análise", "fraude": "Fraude confirmada",
-                "falso_alarme": "Falso alarme"}
+                "falso_alarme": "Falso alarme", "recusado_auto": "Recusado automaticamente"}
 DECISOES = ("fraude", "falso_alarme")
 VISTAS = {"abertos": "Abertos", "novos": "Novos", "meus": "Os meus", "encerrados": "Encerrados"}
 NIVEIS = ("Alto risco", "Atenção")

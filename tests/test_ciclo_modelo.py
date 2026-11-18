@@ -322,3 +322,37 @@ def test_aviso_de_versao_sem_transferencias_nem_levantamentos(app):
     with _sessoes(app).begin() as s:  # uma versão de antes desta funcionalidade não tem a marca nas métricas
         s.execute(update(VersaoModelo).where(VersaoModelo.numero == 1).values(metricas="{}"))
     assert aviso in chefe.get("/modelos/versoes/1").get_data(as_text=True)
+
+
+# ------------------------------------------------------------ corte de recusa automática
+def test_cortes_por_omissao_tem_recusa_95():
+    assert limiares.Cortes().recusa == 95.0
+
+
+def test_ajuste_antigo_sem_recusa_le_se_com_95(app):
+    import json
+    from datetime import datetime
+    from detector.banco import Ajuste
+    with _sessoes(app).begin() as s:
+        s.merge(Ajuste(chave=limiares.CHAVE, valor=json.dumps({"risco": 60.0, "anomalia": 40.0}),
+                       alterado_em=datetime.now(), alterado_por="x"))
+    assert limiares.ler(_sessoes(app))[0] == limiares.Cortes(60, 40, 95)
+
+
+def test_recusa_nao_pode_ser_inferior_ao_risco():
+    with pytest.raises(ValueError, match="maior ou igual ao de alto risco"):
+        limiares.Cortes(risco=50, anomalia=50, recusa=40)
+
+
+def test_pagina_de_limiares_mostra_e_grava_a_recusa(app):
+    chefe = criar_cliente(app, "supervisor", "chefe2")
+    assert 'name="recusa"' in chefe.get("/modelos/limiares").get_data(as_text=True)
+    chefe.post("/modelos/limiares", data={"risco": "60", "anomalia": "50", "recusa": "90"})
+    assert app.config["CORTES"] == limiares.Cortes(60, 50, 90) == limiares.ler(_sessoes(app))[0]
+    assert chefe.post("/modelos/limiares", data={"risco": "60", "anomalia": "50", "recusa": "40"}).status_code == 400
+    assert app.config["CORTES"].recusa == 90
+
+
+def test_estado_recusado_auto_tem_nome():
+    from detector import alertas
+    assert alertas.NOMES_ESTADO["recusado_auto"] == "Recusado automaticamente"

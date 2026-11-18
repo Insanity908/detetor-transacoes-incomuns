@@ -98,7 +98,7 @@ def instalar(app: Flask, sessoes: sessionmaker, pasta_modelos: Path) -> None:
     def _pagina_limiares(proposta: limiares.Cortes | None = None, erro: str | None = None, estado: int = 200):
         atuais, ajuste = limiares.ler(sessoes)
         art = app.config["ARTEFATOS"]
-        candidatos = [atuais, *[limiares.Cortes(c, atuais.anomalia) for c in limiares.CORTES_COMPARADOS]]
+        candidatos = [atuais, *[limiares.Cortes(c, atuais.anomalia, max(c, atuais.recusa)) for c in limiares.CORTES_COMPARADOS]]
         if proposta is not None:
             candidatos.insert(1, proposta)
         vistos, unicos = set(), []
@@ -110,13 +110,22 @@ def instalar(app: Flask, sessoes: sessionmaker, pasta_modelos: Path) -> None:
         return render_template("limiares.html", atuais=atuais, ajuste=ajuste, efeitos=efeitos, proposta=proposta,
                                erro=erro, minimo=limiares.MINIMO, maximo=limiares.MAXIMO), estado
 
+    def _cortes_do_pedido(dados, exigir: bool = False) -> limiares.Cortes:
+        """Lê risco, anomalia e recusa; sem recusa, mantém a atual (subindo-a até ao risco, se for preciso)."""
+        atuais = app.config["CORTES"]
+        risco = float(dados.get("risco", "") if exigir else dados.get("risco", 50))
+        anomalia = float(dados.get("anomalia", "") if exigir else dados.get("anomalia", 50))
+        bruto = dados.get("recusa")
+        recusa = float(bruto) if bruto not in (None, "") else max(atuais.recusa, risco)
+        return limiares.Cortes(risco, anomalia, recusa)
+
     @app.get("/modelos/limiares")
     @exige("supervisor")
     def modelos_limiares():
         proposta = None
         if request.args.get("risco") or request.args.get("anomalia"):
             try:
-                proposta = limiares.Cortes(float(request.args.get("risco", 50)), float(request.args.get("anomalia", 50)))
+                proposta = _cortes_do_pedido(request.args)
             except (ValueError, TypeError) as exc:
                 return _pagina_limiares(erro=str(exc) if "limite" in str(exc) else "Use números entre 1 e 99.", estado=400)
         return _pagina_limiares(proposta)
@@ -125,13 +134,14 @@ def instalar(app: Flask, sessoes: sessionmaker, pasta_modelos: Path) -> None:
     @exige("supervisor")
     def modelos_limiares_post():
         try:
-            novos = limiares.Cortes(float(request.form.get("risco", "")), float(request.form.get("anomalia", "")))
+            novos = _cortes_do_pedido(request.form, exigir=True)
         except (ValueError, TypeError) as exc:
             return _pagina_limiares(erro=str(exc) if "limite" in str(exc) else "Use números entre 1 e 99.", estado=400)
         antes = app.config["CORTES"]
         limiares.gravar(sessoes, novos, utilizador_atual().nome_utilizador)
         app.config["CORTES"] = novos
         auditar("limiares_alterados", detalhe=f"risco {antes.risco:g} -> {novos.risco:g}; "
-                                              f"anomalia {antes.anomalia:g} -> {novos.anomalia:g}")
+                                              f"anomalia {antes.anomalia:g} -> {novos.anomalia:g}; "
+                                              f"recusa {antes.recusa:g} -> {novos.recusa:g}")
         flash("Limiares gravados. Valem para as transações avaliadas a partir de agora.", "sucesso")
         return redirect(url_for("modelos_limiares"))

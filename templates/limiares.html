@@ -4,8 +4,8 @@
 <h1>Limiares de alerta</h1>
 <p class="ajuda">Na escala de 0 a 100 da interface. Uma transação é <strong>Alto risco</strong> quando o risco chega ao limite de
   risco, e <strong>Atenção</strong> quando a anomalia chega ao limite de anomalia (só para clientes com histórico).
-  Os do treino são 50 e 50. Subir dá menos alertas e menos falsos alarmes, mas deixa passar mais fraudes.</p>
-<p>Em vigor: risco <strong>{{ atuais.risco | decimal(0) }}</strong>, anomalia <strong>{{ atuais.anomalia | decimal(0) }}</strong>
+  Os do treino são 50 e 50. A <strong>recusa automática</strong> (por omissão 95, nunca abaixo do limite de risco) é o risco a partir do qual o banco recusa a operação sem esperar por análise; não altera os níveis dos alertas. Subir dá menos alertas e menos falsos alarmes, mas deixa passar mais fraudes.</p>
+<p>Em vigor: risco <strong>{{ atuais.risco | decimal(0) }}</strong>, anomalia <strong>{{ atuais.anomalia | decimal(0) }}</strong>, recusa automática <strong>{{ atuais.recusa | decimal(0) }}</strong>
   {% if ajuste %}<span class="ajuda">· alterados em {{ ajuste.alterado_em.strftime('%d/%m/%Y %H:%M') }} por {{ ajuste.alterado_por }}</span>{% endif %}</p>
 {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
@@ -14,6 +14,8 @@
     value="{{ (proposta or atuais).risco | int }}" required></label>
   <label>Anomalia <input name="anomalia" type="number" min="{{ minimo }}" max="{{ maximo }}" step="1"
     value="{{ (proposta or atuais).anomalia | int }}" required></label>
+  <label>Recusa automática <input name="recusa" type="number" min="{{ minimo }}" max="{{ maximo }}" step="1"
+    value="{{ (proposta or atuais).recusa | int }}" required></label>
   <button type="submit" class="secundario">Ver o efeito</button>
 </form>
 
@@ -43,6 +45,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="risco" value="{{ proposta.risco | int }}">
   <input type="hidden" name="anomalia" value="{{ proposta.anomalia | int }}">
+  <input type="hidden" name="recusa" value="{{ proposta.recusa | int }}">
   <button type="submit" class="principal">Gravar risco {{ proposta.risco | int }} e anomalia {{ proposta.anomalia | int }}</button>
   <span class="ajuda">Vale para as transações avaliadas a partir de agora; as anteriores ficam como estão.</span>
 </form>
@@ -50,8 +53,8 @@
 {% if not atuais.padrao %}
 <form method="post" action="/modelos/limiares" class="envio">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="risco" value="50"><input type="hidden" name="anomalia" value="50">
-  <button type="submit" class="secundario">Voltar aos limiares do treino (50 e 50)</button>
+  <input type="hidden" name="risco" value="50"><input type="hidden" name="anomalia" value="50"><input type="hidden" name="recusa" value="95">
+  <button type="submit" class="secundario">Voltar aos limiares do treino (50, 50 e 95)</button>
 </form>
 {% endif %}
 {% endblock %}
