@@ -28,7 +28,7 @@ def executar_offline() -> None:
 
 
 def executar_online() -> None:
-    motor = criar_motor(_url())
+    motor = criar_motor(_url(), chaves_estrangeiras=False)  # ver criar_motor: evita apagar em cascata
     with motor.connect() as ligacao:
         context.configure(connection=ligacao, target_metadata=Base.metadata, render_as_batch=True)
         with context.begin_transaction():

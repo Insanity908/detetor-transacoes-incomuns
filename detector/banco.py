@@ -103,7 +103,9 @@ class TransacaoAvaliada(Base):
     analise: Mapped[Analise] = relationship(back_populates="transacoes")
 
 
-def criar_motor(url: str) -> Engine:
+def criar_motor(url: str, chaves_estrangeiras: bool = True) -> Engine:
+    """Com chaves_estrangeiras=False (só nas migrações): no SQLite, alterar uma tabela é recriá-la, e apagar a
+    antiga com as chaves ligadas dispararia os ON DELETE CASCADE / SET NULL das outras tabelas."""
     if url.startswith("sqlite"):
         caminho = url.split("///", 1)[1] if "///" in url else ""
         if caminho and caminho != ":memory:":
@@ -113,7 +115,7 @@ def criar_motor(url: str) -> Engine:
         @event.listens_for(motor, "connect")
         def _pragmas(ligacao, _):
             cursor = ligacao.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute(f"PRAGMA foreign_keys={'ON' if chaves_estrangeiras else 'OFF'}")
             cursor.execute("PRAGMA journal_mode=WAL")  # leituras não bloqueiam durante uma gravação
             cursor.execute("PRAGMA busy_timeout=5000")
             cursor.close()
