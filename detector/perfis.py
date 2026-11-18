@@ -27,7 +27,9 @@ def normalizar(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _features_do_cliente(grupo: pd.DataFrame) -> np.ndarray:
+def _features_do_cliente(grupo: pd.DataFrame, calcular: np.ndarray | None = None) -> np.ndarray:
+    """Features de cada linha, por ordem de tempo. Com `calcular`, só as linhas marcadas são calculadas:
+    as outras (o histórico) apenas atualizam o estado do cliente, o que dá exatamente os mesmos valores."""
     tempos = grupo["data_hora"].to_numpy("datetime64[ns]").astype(np.int64)
     valores = grupo["valor"].to_numpy(float)
     horas = (grupo["data_hora"].dt.hour + grupo["data_hora"].dt.minute / 60).to_numpy()
@@ -36,6 +38,12 @@ def _features_do_cliente(grupo: pd.DataFrame) -> np.ndarray:
     ordenados: list[float] = []  # valores anteriores em ordem, para a mediana sem reordenar a cada passo
     saida = np.zeros((len(grupo), len(FEATURES)))
     for j in range(len(grupo)):
+        if calcular is not None and not calcular[j]:
+            insort(ordenados, valores[j])
+            vistos["pais"].add(paises[j])
+            vistos["cidade"].add(cidades[j])
+            vistos["categoria"].add(categorias[j])
+            continue
         t = tempos[j]
         curto = j < MIN_HISTORICO
         if curto:
@@ -62,7 +70,8 @@ def _features_do_cliente(grupo: pd.DataFrame) -> np.ndarray:
     return saida
 
 
-def calcular_features(df: pd.DataFrame, historico: pd.DataFrame | None = None) -> pd.DataFrame:
+def calcular_features(df: pd.DataFrame, historico: pd.DataFrame | None = None,
+                      historico_normalizado: bool = False) -> pd.DataFrame:
     """Uma linha de features por linha de `df`, com o mesmo índice.
 
     Cada linha usa as transações anteriores do mesmo cliente, vindas de `historico` e das linhas
@@ -71,13 +80,14 @@ def calcular_features(df: pd.DataFrame, historico: pd.DataFrame | None = None) -
     novas = normalizar(df).assign(_origem=1, _ordem=np.arange(len(df)), _indice=df.index)
     partes = [novas]
     if historico is not None and len(historico):
-        partes.insert(0, normalizar(historico).assign(_origem=0, _ordem=np.arange(len(historico)), _indice=-1))
+        base = historico if historico_normalizado else normalizar(historico)
+        partes.insert(0, base.assign(_origem=0, _ordem=np.arange(len(historico)), _indice=-1))
     todas = pd.concat(partes, ignore_index=True)
     todas = todas.sort_values(["cliente", "data_hora", "_origem", "_ordem"], kind="stable")
     blocos = []
     for _, grupo in todas.groupby("cliente", sort=False):
-        valores = _features_do_cliente(grupo)
         manter = grupo["_origem"].to_numpy() == 1
+        valores = _features_do_cliente(grupo, manter)
         blocos.append(pd.DataFrame(valores[manter], columns=FEATURES, index=grupo["_indice"].to_numpy()[manter]))
     resultado = pd.concat(blocos) if blocos else pd.DataFrame(columns=FEATURES)
     resultado = resultado.loc[df.index]
@@ -86,9 +96,9 @@ def calcular_features(df: pd.DataFrame, historico: pd.DataFrame | None = None) -
     return resultado.astype({c: int for c in inteiras})
 
 
-def perfil_cliente(historico: pd.DataFrame, cliente: str) -> dict | None:
+def perfil_cliente(historico: pd.DataFrame, cliente: str, normalizado: bool = False) -> dict | None:
     """O comportamento normal do cliente, só com as compras legítimas."""
-    dados = normalizar(historico)
+    dados = historico if normalizado else normalizar(historico)
     dados = dados[dados["cliente"] == str(cliente).strip().upper()]
     if "fraude" in dados.columns:
         dados = dados[dados["fraude"] == 0]

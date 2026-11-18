@@ -1,0 +1,3 @@
+# Dependências para desenvolver e para o CI: as do sistema e o linter.
+-r requirements.txt
+ruff==0.14.5

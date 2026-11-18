@@ -48,7 +48,7 @@ def medir(sessoes: sessionmaker, versao: int | None, base: dict | None) -> dict:
         atual["desde"], atual["ate"] = linhas[-1][0], linhas[0][0]
 
     dias = defaultdict(lambda: [0, 0, 0, 0])  # transações, fraudes, apanhadas, alertas
-    for (quando, n, _, _), fraude in zip(linhas, y):
+    for (quando, n, _, _), fraude in zip(linhas, y, strict=True):
         d = dias[quando.date()]
         d[0] += 1
         d[1] += fraude

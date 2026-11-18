@@ -304,40 +304,40 @@ def indicadores(sessoes: sessionmaker, dias: int = 30, hoje: date | None = None)
     ind = Indicadores(dias=dias, inicio=inicio)
 
     contagem = {inicio + timedelta(days=i): Counter() for i in range(dias)}
-    for l in linhas:
-        if l.criado_em >= desde and l.criado_em.date() in contagem:
-            contagem[l.criado_em.date()]["alto" if l.nivel == "Alto risco" else "atencao"] += 1
+    for x in linhas:
+        if x.criado_em >= desde and x.criado_em.date() in contagem:
+            contagem[x.criado_em.date()]["alto" if x.nivel == "Alto risco" else "atencao"] += 1
     ind.por_dia = [{"dia": d, "alto": c["alto"], "atencao": c["atencao"], "total": c["alto"] + c["atencao"]}
                    for d, c in contagem.items()]
     ind.criados = sum(d["total"] for d in ind.por_dia)
 
-    decididas = [l for l in linhas if l.decidido_em is not None and l.decidido_em >= desde]
+    decididas = [x for x in linhas if x.decidido_em is not None and x.decidido_em >= desde]
     ind.decididos = len(decididas)
-    ind.fraudes = sum(l.estado == "fraude" for l in decididas)
-    ind.falsos = sum(l.estado == "falso_alarme" for l in decididas)
+    ind.fraudes = sum(x.estado == "fraude" for x in decididas)
+    ind.falsos = sum(x.estado == "falso_alarme" for x in decididas)
     ind.taxa_falsos = ind.falsos / ind.decididos if ind.decididos else None
-    horas = sorted((l.decidido_em - l.criado_em).total_seconds() / 3600 for l in decididas)
+    horas = sorted((x.decidido_em - x.criado_em).total_seconds() / 3600 for x in decididas)
     if horas:
         ind.horas_decisao = sum(horas) / len(horas)
         meio = len(horas) // 2
         ind.horas_decisao_mediana = horas[meio] if len(horas) % 2 else (horas[meio - 1] + horas[meio]) / 2
-    ind.valor_fraude = sum(l.valor for l in decididas if l.estado == "fraude")
+    ind.valor_fraude = sum(x.valor for x in decididas if x.estado == "fraude")
 
-    abertos = [l for l in linhas if l.estado in ESTADOS_ABERTOS]
-    ind.abertos = {e: sum(l.estado == e for l in abertos) for e in ESTADOS_ABERTOS}
-    ind.valor_em_risco = sum(l.valor for l in abertos)
-    ind.valor_em_risco_alto = sum(l.valor for l in abertos if l.nivel == "Alto risco")
+    abertos = [x for x in linhas if x.estado in ESTADOS_ABERTOS]
+    ind.abertos = {e: sum(x.estado == e for x in abertos) for e in ESTADOS_ABERTOS}
+    ind.valor_em_risco = sum(x.valor for x in abertos)
+    ind.valor_em_risco_alto = sum(x.valor for x in abertos if x.nivel == "Alto risco")
 
-    pessoas = {l.atribuido_a for l in abertos if l.atribuido_a} | {l.decidido_por for l in decididas if l.decidido_por}
+    pessoas = {x.atribuido_a for x in abertos if x.atribuido_a} | {x.decidido_por for x in decididas if x.decidido_por}
     for pid in pessoas:
-        minhas = [l for l in decididas if l.decidido_por == pid]
-        h = [(l.decidido_em - l.criado_em).total_seconds() / 3600 for l in minhas]
+        minhas = [x for x in decididas if x.decidido_por == pid]
+        h = [(x.decidido_em - x.criado_em).total_seconds() / 3600 for x in minhas]
         ind.por_pessoa.append({
             "nome": nomes.get(pid, "—"),
-            "em_analise": sum(l.atribuido_a == pid and l.estado == "em_analise" for l in abertos),
+            "em_analise": sum(x.atribuido_a == pid and x.estado == "em_analise" for x in abertos),
             "decididos": len(minhas),
-            "fraudes": sum(l.estado == "fraude" for l in minhas),
-            "falsos": sum(l.estado == "falso_alarme" for l in minhas),
+            "fraudes": sum(x.estado == "fraude" for x in minhas),
+            "falsos": sum(x.estado == "falso_alarme" for x in minhas),
             "horas_decisao": sum(h) / len(h) if h else None,
         })
     ind.por_pessoa.sort(key=lambda p: (-p["em_analise"] - p["decididos"], p["nome"]))

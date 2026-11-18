@@ -398,3 +398,25 @@ def test_migracao_0002_desfaz_e_refaz(ambiente_de_teste):
     migrar(url)
     command.downgrade(configuracao_alembic(url), "0001")
     migrar(url)
+
+
+def test_criar_admin_interativo_pede_de_novo_quando_a_senha_falha(app, monkeypatch, capsys):
+    import gerir
+    respostas = iter(["Chefe", "Chefe da Equipa"])
+    senhas = iter(["curta", "curta", "uma-senha-forte", "outra-senha-x", "uma-senha-forte", "uma-senha-forte"])
+    monkeypatch.setattr("builtins.input", lambda _: next(respostas))
+    monkeypatch.setattr(gerir.getpass, "getpass", lambda _: next(senhas))
+    gerir.criar_admin_interativo()
+    saida = capsys.readouterr().out
+    assert "pelo menos 10" in saida and "não são iguais" in saida and "criado" in saida
+    assert contas.obter_por_nome(_sessoes(app), "chefe").perfil == "administrador"
+
+
+def test_preparar_sem_teclado_nao_falha(app, monkeypatch, capsys):
+    import gerir
+    monkeypatch.setattr(gerir, "criar_env", lambda: False)
+    monkeypatch.setattr(gerir, "treinar", lambda forcar=False: None)
+    monkeypatch.setattr(gerir.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _: (_ for _ in ()).throw(EOFError))
+    gerir.main(["preparar"])
+    assert "Nenhuma conta criada" in capsys.readouterr().out

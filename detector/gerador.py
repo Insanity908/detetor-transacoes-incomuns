@@ -123,7 +123,7 @@ def gerar_transacoes(n_clientes: int = 300, dias: int = DIAS, semente: int = 42,
     tipos = [TIPOS_FRAUDE[i % len(TIPOS_FRAUDE)] for i in range(eventos)]  # todos os tipos aparecem
     escolhidos = rng.integers(0, n_clientes, eventos)
     fraudes = [_fraude(rng, clientes[i], t, dias, t0, proporcoes.index.to_numpy(), proporcoes.to_numpy())
-               for i, t in zip(escolhidos, tipos)]
+               for i, t in zip(escolhidos, tipos, strict=True)]
     df = pd.concat([legitimas, *fraudes], ignore_index=True)
     df["data_hora"] = df["data_hora"].dt.floor("s")
     df = df[df["data_hora"] < t0 + pd.Timedelta(days=dias)]

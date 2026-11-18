@@ -113,7 +113,7 @@ def simular(api: ClienteApi, sim: Simulador, velocidade: float, duracao: float =
             for i in range(0, len(prontas), MAX_LOTE):
                 lote = prontas[i:i + MAX_LOTE]
                 resposta = api.pedir("POST", "/api/v1/transacoes", {"transacoes": lote})
-                for enviada, resultado in zip(lote, resposta["resultados"]):
+                for enviada, resultado in zip(lote, resposta["resultados"], strict=True):
                     est.registar(enviada, resultado)
             if relogio() - ultimo_resumo >= intervalo_resumo:
                 escrever(resumo(est, agora))

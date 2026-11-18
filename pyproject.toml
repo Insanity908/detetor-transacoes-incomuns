@@ -1,0 +1,23 @@
+# Configuração das ferramentas de qualidade (o projeto instala-se com requirements.txt, não é um pacote).
+
+[tool.ruff]
+line-length = 135  # o estilo que o código já segue
+target-version = "py311"
+extend-exclude = ["migracoes/versions/__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = [
+    "E731",  # pequenos lambda locais são usados de propósito para fórmulas de uma linha
+    "B008",  # argumentos por omissão imutáveis (dataclasses congeladas, Path) são seguros
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "carga: teste de carga com o servidor real (lento; corre só com -m carga)",
+]
+addopts = "-m 'not carga'"
+filterwarnings = [
+    "ignore::DeprecationWarning:joblib.*",
+]

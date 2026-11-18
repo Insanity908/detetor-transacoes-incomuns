@@ -7,3 +7,10 @@ data/
 instancia/
 logs/
 .env
+.ruff_cache/
+*.log
+*.db
+*.db-shm
+*.db-wal
+.coverage
+htmlcov/

@@ -1,106 +1,76 @@
-# Detetor de transações incomuns
+# Detetor de Fraudes Financeiras
 
-Trabalho da disciplina de Inteligência Artificial (INAR) da Universidade Católica de Moçambique.
+Sistema web que avalia transações de cartão, marca as que fogem do comportamento habitual de cada cliente e leva
+a equipa a investigá-las numa fila de alertas, com auditoria de tudo o que é feito. Funciona em Windows, sem
+Docker nem servidor de base de dados, e é alimentado por dados sintéticos: um gerador de transações para o treino
+e um simulador que envia transações continuamente pela API, como se viessem de um banco.
 
-O sistema avalia o risco de cada transação a partir do **comportamento habitual do cliente**. Uma compra de
-15.000 MT pode ser normal para um cliente e muito estranha para outro: por isso, o sistema aprende o normal de
-cada cliente (valores, horários, cidades, países, categorias e frequência) e mede o quanto cada compra foge dele.
+## Arranque rápido (Windows)
 
-Dois tipos de modelo trabalham juntos:
+1. Instale o [Python 3.11 ou mais recente](https://www.python.org/downloads/windows/), com a opção
+   **"Add python.exe to PATH"** marcada.
+2. Na pasta do projeto, faça duplo clique em **`instalar.bat`**. Cria o ambiente, instala as dependências, prepara
+   a base de dados, treina os modelos (1 a 2 minutos) e pede os dados do primeiro administrador.
+3. Faça duplo clique em **`iniciar.bat`** e entre no navegador, em <http://127.0.0.1:5000>.
 
-- **Classificador supervisionado** (Random Forest, escolhido entre três), que aprendeu com fraudes rotuladas.
-- **Detetor de anomalias** (Isolation Forest), que aprendeu sem rótulos e serve de segunda opinião.
+Para ver o sistema a receber transações em tempo real, com o sistema ligado:
 
-Cada alerta vem com os motivos, em linguagem simples, por exemplo: "Valor 8,2 vezes o habitual deste cliente
-(habitual: 1.450 MT)".
-
-**O que o sistema não faz:** foi treinado e avaliado só com dados sintéticos, e só conhece os padrões de fraude
-que o gerador cria. Os resultados não valem automaticamente para fraudes reais.
-
-## Como executar
-
-Precisa de Python 3.11 ou mais recente (exigência das versões fixadas em `requirements.txt`).
-
-```bash
-pip install -r requirements.txt
-python treinar.py      # gera os dados, treina e avalia; grava modelos/ e RELATORIO.md (1 a 2 minutos)
-python app.py          # abre a interface em http://127.0.0.1:5000
-python -m pytest       # testes automáticos
+```
+.venv\Scripts\python gerir.py criar-chave Simulador
+.venv\Scripts\python simulador.py --chave dtf_...
 ```
 
-Não há base de dados: os dados ficam em `data/transacoes.csv`, os modelos em `modelos/` e os resultados em
-`modelos/resultados.json`. Para começar do zero, apague `data/` e `modelos/` e execute `python treinar.py` de novo.
+Os alertas aparecem em **Alertas** (use "Atualizar automaticamente").
 
-## A interface
+## O que faz
 
-| Página | O que faz |
+| Área | Resumo |
 |---|---|
-| **Testar transação** | Formulário e seis exemplos prontos (compra normal, valor alto, país estranho, madrugada, conta tomada e rajada). Mostra o nível (Alto risco, Atenção ou Normal), o risco, a anomalia e os motivos. |
-| **Analisar ficheiro** | Envio de um CSV (até 5 MB, também do Excel em português), tabela ordenada por risco, filtro "só alertas" e download do resultado. |
-| **Perfil do cliente** | O comportamento normal de um cliente e as transações dele que os modelos marcaram no período de teste. |
-| **Modelos** | Comparação dos modelos, matriz de confusão, recall por tipo de fraude, importância das features e divisão aleatória contra divisão por tempo. |
+| **Deteção** | Para cada compra, compara o valor, a hora, o local, a categoria e o ritmo com o histórico do cliente. Um classificador (o mais simples entre Regressão logística, Random Forest e Gradient Boosting que fica a 0,02 do melhor F1) dá o **risco**; um Isolation Forest, sem rótulos, dá a **anomalia**. Cada alerta vem com os motivos em linguagem simples. |
+| **Alertas** | Fila com os estados Novo → Em análise → Fraude confirmada / Falso alarme. Inclui atribuição, comentários, histórico, notificações (um sino no cabeçalho) e e-mail opcional. Há um painel com alertas por dia, taxa de falsos alarmes, valor em risco e tempo até à decisão. |
+| **Utilizadores** | Login com senhas em hash e três perfis (analista, supervisor e administrador). Proteção CSRF e auditoria de todas as ações. |
+| **Integração** | API REST (`/api/v1/transacoes`) com chaves, limite de pedidos e documentação OpenAPI. Ficheiros CSV grandes são analisados em segundo plano. |
+| **Ciclo do modelo** | Monitorização do desempenho nas transações recentes e re-treino pela interface, com as decisões dos analistas como rótulos. Cada versão pode ser publicada ou desfeita, e os limiares de alerta são ajustáveis. Os modelos são assinados (HMAC) e verificados antes de serem carregados. |
+| **Simulação** | Compras normais e 5 tipos de fraude (valor alto, país estranho, horário estranho, rajada, conta tomada). Há também cenários de mudança (novo tipo de fraude, hábitos, inflação), para demonstrar a monitorização e o re-treino. |
 
-O CSV precisa das colunas `cliente, data_hora, valor, cidade, pais, categoria`; `id_transacao` é opcional. As
-datas podem estar em `aaaa-mm-dd hh:mm` ou `dd/mm/aaaa hh:mm`.
+## Documentação
 
-## Conceitos da disciplina e onde aparecem
-
-| Conceito (aulas) | Onde está no código |
-|---|---|
-| Divisão em treino e teste | `dividir_periodos` em `detector/avaliacao.py`: treino, validação e teste por tempo. A divisão aleatória das aulas (`train_test_split`) é comparada em `treinar.py` |
-| Normalização (`StandardScaler`) | `criar_classificadores` em `detector/modelos.py`, dentro de cada `Pipeline` |
-| Classificação supervisionada | Regressão logística, Random Forest e Gradient Boosting em `detector/modelos.py` |
-| Aprendizagem não supervisionada | Isolation Forest em `detector/modelos.py`, treinado sem os rótulos |
-| Métricas e matriz de confusão | `metricas` em `detector/avaliacao.py`; página Modelos e `RELATORIO.md` |
-| Importância das features | `permutation_importance` em `treinar.py`; gráfico na página Modelos |
-| Previsão de dados novos | `avaliar_transacoes` em `detector/servico.py`; páginas Testar e Analisar |
-| Exportação dos modelos | `gravar` e `carregar` em `detector/artefatos.py`, com joblib |
-
-Duas decisões vão além das aulas, e o relatório explica as duas:
-
-- **Divisão por tempo:** com transações, treinar com o passado e avaliar o futuro corresponde ao uso real.
-- **Métricas da classe fraude:** com cerca de 1% de fraudes, dizer "legítima" para tudo já dá 99% de
-  acurácia. Por isso os modelos são comparados pela precisão, pelo recall e pelo F1 da classe fraude.
-
-## Resultados
-
-Com 70.972 transações de 300 clientes e 713 fraudes, o modelo escolhido na validação foi o **Random Forest**. No
-teste, encontrou **70,0%** das fraudes, com **99,0%** dos alertas corretos (F1 de 0,820). O detalhe, com os
-gráficos, o recall de cada tipo de fraude e a medida dos clientes novos, está em [`RELATORIO.md`](RELATORIO.md).
-
-**Clientes novos.** Cerca de 25% dos clientes aderem depois dos primeiros 30 dias, para o modelo ver compras de
-clientes sem histórico no treino. Sem histórico não há comportamento habitual com que comparar, por isso o Isolation
-Forest não dá alerta nesses casos, e a interface avisa que a avaliação é menos fiável. Esta correção foi feita depois
-de uma primeira versão em que todos os clientes começavam no dia 1: aí o modelo nunca via um cliente novo e marcava
-como "Alto risco" as primeiras compras de madrugada. Com a mudança dos dados, os resultados também mudaram (antes:
-84,6% das fraudes apanhadas, 90,9% de alertas corretos).
+- [Manual de instalação (Windows)](docs/manual_instalacao.md): do Python ao primeiro login, uso na rede local,
+  problemas frequentes e atualização.
+- [Manual do utilizador](docs/manual_utilizador.md): perfis, níveis de risco, o ciclo de um alerta, ficheiros,
+  painel, limiares e versões do modelo.
+- [Manual de administração](docs/manual_administracao.md): configuração (`.env`), comandos, contas, API e chaves,
+  simulador, ciclo de vida do modelo, cópias de segurança, segurança e desempenho.
+- [Plano do sistema](PLANO_SISTEMA_COMPLETO.md): as seis fases, do protótipo ao sistema completo.
 
 ## Estrutura
 
-| Ficheiro | Função |
-|---|---|
-| `detector/gerador.py` | Clientes de Moçambique com hábitos próprios e cinco tipos de fraude rotulados |
-| `detector/perfis.py` | Normal de cada cliente e features de comportamento, só com o passado |
-| `detector/modelos.py` | Os três classificadores, o Isolation Forest, limiares e escolha do modelo |
-| `detector/avaliacao.py` | Períodos e métricas |
-| `detector/explicacao.py` | Motivos em linguagem simples |
-| `detector/entrada.py` | Leitura e validação de CSV e do formulário |
-| `detector/servico.py` | Avaliação de transações novas |
-| `detector/artefatos.py` | Gravar e carregar os modelos |
-| `detector/exemplos.py` | Exemplos da página de teste |
-| `treinar.py` | Treino completo, gráficos e relatório |
-| `app.py`, `templates/`, `static/` | Interface Flask |
-| `tests/` | Testes automáticos |
+```
+app.py              aplicação web (Flask): páginas principais e ligação dos módulos
+servidor.py         servidor de produção (waitress), usado pelo iniciar.bat
+gerir.py            administração: preparar, banco, treinar, verificar, criar-admin, desbloquear, criar-chave
+treinar.py          treino inicial: gera os dados, treina, avalia e grava os modelos (versão 1)
+simulador.py        envia transações simuladas à API, com cenários de mudança
+carga.py            teste de carga da API
+detector/           o sistema: modelos, features, API, alertas, contas, auditoria, versões, monitorização...
+migracoes/          alterações da base de dados (Alembic), aplicadas automaticamente
+templates/, static/ interface
+tests/              testes (pytest)
+docs/               manuais
+```
 
-## Limitações
+Os dados gerados não vão para o Git: a base de dados e a chave local ficam em `instancia/`, os modelos em
+`modelos/`, os dados do treino em `data/`, os registos em `logs/` e a configuração em `.env`.
 
-- Os dados são sintéticos e de um único gerador.
-- O sistema só conhece os padrões de fraude que o gerador cria.
-- Clientes com menos de 5 compras são avaliados com pouca informação. O treino tem poucas fraudes de clientes
-  novos (2 no período de treino), por isso o modelo quase não alerta nesse grupo: uma compra muito alta ou num país
-  estranho de um cliente novo tende a sair como "Normal", só com o aviso de pouco histórico.
-- O perfil de cada cliente só muda quando o treino é executado de novo.
-- O Random Forest usa 100 árvores (o valor das aulas) em vez das 300 previstas no design, para o treino ser
-  mais rápido. A mudança foi feita depois de ver o resultado do teste, por causa do tempo e não do desempenho
-  (na primeira versão dos dados, F1 de 0,870 com 300 árvores e 0,876 com 100).
-- Os ficheiros de modelo usam joblib (pickle): carregue apenas modelos gerados por si.
+## Desenvolvimento
+
+```
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest              # cerca de 330 testes, uns 6 minutos
+.venv\Scripts\python -m pytest -m carga     # teste de carga com o servidor waitress
+.venv\Scripts\python -m ruff check .        # linter
+python app.py                               # servidor de desenvolvimento em http://127.0.0.1:5000
+```
+
+O GitHub Actions corre o linter e os testes a cada push e pull request, em Windows (Python 3.13) e Linux
+(Python 3.11).

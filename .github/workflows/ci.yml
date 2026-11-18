@@ -1,0 +1,50 @@
+# Integração contínua: a cada push e pull request, corre o linter e os testes.
+name: Qualidade
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Linter (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff==0.14.5
+      - run: ruff check --output-format=github .
+
+  testes:
+    name: Testes (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest  # o sistema é instalado em Windows
+            python: "3.13"
+          - os: ubuntu-latest   # a versão mínima que o instalar.bat aceita
+            python: "3.11"
+    env:
+      AMBIENTE: teste
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q --durations=10

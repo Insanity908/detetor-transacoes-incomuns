@@ -166,10 +166,12 @@ def main(argv: list[str] | None = None) -> int:
             treinar()
             from detector import contas
             if contas.contar(_sessoes()) == 0:
-                if sys.stdin.isatty():
+                try:
+                    if not sys.stdin.isatty():
+                        raise EOFError
                     criar_admin_interativo()
-                else:
-                    print("Nenhuma conta criada: execute python gerir.py criar-admin")
+                except (EOFError, KeyboardInterrupt):  # sem teclado (ou Ctrl+C): a instalação continua
+                    print("\nNenhuma conta criada. Crie o administrador com: .venv\\Scripts\\python gerir.py criar-admin")
             return verificar()
         if args.comando == "banco":
             banco()

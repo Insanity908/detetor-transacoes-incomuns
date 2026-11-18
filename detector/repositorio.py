@@ -52,12 +52,12 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
     with sessoes.begin() as sessao:
         analise = Analise(chave=chave, origem=origem, nome_ficheiro=(nome_ficheiro or None) and nome_ficheiro[:255],
                           criada_em=datetime.now().replace(microsecond=0), total=len(linhas),
-                          alertas=sum(l["nivel"] != "Normal" for l in linhas), modelo=modelo,
+                          alertas=sum(x["nivel"] != "Normal" for x in linhas), modelo=modelo,
                           utilizador_id=utilizador_id, chave_api_id=chave_api_id, versao_modelo=versao_modelo)
         sessao.add(analise)
         sessao.flush()
         if linhas:
-            sessao.execute(insert(TransacaoAvaliada), [l | {"analise_id": analise.id} for l in linhas])
+            sessao.execute(insert(TransacaoAvaliada), [x | {"analise_id": analise.id} for x in linhas])
         if gerar_alertas:
             criar_para_analise(sessao, analise.id, analise.criada_em)
     return chave
@@ -78,7 +78,7 @@ def obter_transacoes(sessoes: sessionmaker, analise: Analise, so_alertas: bool =
     if limite is not None:
         consulta = consulta.limit(limite)
     with sessoes() as sessao:
-        linhas = [dict(zip(COLUNAS, r)) for r in sessao.execute(consulta)]
+        linhas = [dict(zip(COLUNAS, r, strict=True)) for r in sessao.execute(consulta)]
     for linha in linhas:
         linha["motivos"] = json.loads(linha["motivos"])
     df = pd.DataFrame(linhas, columns=list(COLUNAS))
@@ -119,7 +119,7 @@ def historico_api(sessoes: sessionmaker, clientes: set[str], desde: datetime) ->
                 .order_by(TransacaoAvaliada.data_hora, TransacaoAvaliada.id))
     with sessoes() as sessao:
         linhas = sessao.execute(consulta).all()
-    df = pd.DataFrame([dict(zip(colunas, l[:-1])) | {"fraude": int(l[-1] == "fraude")} for l in linhas],
+    df = pd.DataFrame([dict(zip(colunas, x[:-1], strict=True)) | {"fraude": int(x[-1] == "fraude")} for x in linhas],
                       columns=[*colunas, "fraude"])
     df["data_hora"] = pd.to_datetime(df["data_hora"])
     return df

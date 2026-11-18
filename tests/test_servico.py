@@ -170,9 +170,9 @@ def test_usa_so_o_historico_dos_clientes_enviados(artefatos_pequenos, monkeypatc
     vistos = {}
     original = servico.calcular_features
 
-    def espiao(df, historico=None):
+    def espiao(df, historico=None, **opcoes):
         vistos["clientes"] = set(historico["cliente"].astype(str).str.strip())
-        return original(df, historico=historico)
+        return original(df, historico=historico, **opcoes)
 
     monkeypatch.setattr(servico, "calcular_features", espiao)
     avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(cliente=" C0001 ")]))
@@ -233,9 +233,9 @@ def test_id_igual_de_outra_compra_nao_apaga_o_historico(artefatos_pequenos, monk
     vistos = {}
     original = servico.calcular_features
 
-    def espiao(df, historico=None):
+    def espiao(df, historico=None, **opcoes):
         vistos["ids"] = set(historico["id_transacao"])
-        return original(df, historico=historico)
+        return original(df, historico=historico, **opcoes)
 
     monkeypatch.setattr(servico, "calcular_features", espiao)
     nova = _linha(id_transacao=alheia.id_transacao, data_hora=pd.Timestamp("2026-04-29 10:00"), valor=33.0)

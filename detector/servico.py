@@ -48,30 +48,31 @@ def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame,
     historico = (pd.concat(partes, ignore_index=True) if partes
                  else normalizar(artefatos.historico.iloc[:0]))
     if "id_transacao" in historico.columns:  # a mesma transação já guardada não pode ser o próprio passado
-        chave = lambda d: list(zip(d["id_transacao"].astype(str), d["cliente"], d["data_hora"]))
+        chave = lambda d: list(zip(d["id_transacao"].astype(str), d["cliente"], d["data_hora"], strict=True))
         repetidas = set(chave(enviadas))
         manter = np.array([c not in repetidas for c in chave(historico)], dtype=bool)  # lista vazia seria colunas
         historico = historico[manter]
-    features = calcular_features(transacoes, historico=historico)
-    return montar_resultado(transacoes, features, artefatos.detector.avaliar(features, cortes), historico)
+    features = calcular_features(transacoes, historico=historico, historico_normalizado=True)
+    return montar_resultado(transacoes, features, artefatos.detector.avaliar(features, cortes), historico,
+                            historico_normalizado=True)
 
 
 def montar_resultado(transacoes: pd.DataFrame, features: pd.DataFrame, avaliacao: pd.DataFrame,
-                     historico: pd.DataFrame) -> pd.DataFrame:
+                     historico: pd.DataFrame, historico_normalizado: bool = False) -> pd.DataFrame:
     """Junta transações, avaliação e motivos.
 
     O perfil de cada cliente usa só as compras legítimas anteriores à primeira transação enviada dele,
     para o "habitual" dos motivos não incluir compras do futuro.
     """
     normalizadas = normalizar(transacoes)
-    hist_normalizado = normalizar(historico)
+    hist_normalizado = historico if historico_normalizado else normalizar(historico)
     por_cliente = {c: g for c, g in hist_normalizado.groupby("cliente")}
     inicio = normalizadas.groupby("cliente")["data_hora"].min()
-    perfis = {c: perfil_cliente(por_cliente[c][por_cliente[c]["data_hora"] < inicio[c]], c)
+    perfis = {c: perfil_cliente(por_cliente[c][por_cliente[c]["data_hora"] < inicio[c]], c, normalizado=True)
               if c in por_cliente else None for c in normalizadas["cliente"].unique()}
     lista_motivos = [
         motivos(linha, features.loc[indice].to_dict(), perfis[linha["cliente"]])
-        for indice, linha in zip(normalizadas.index, normalizadas.to_dict("records"))
+        for indice, linha in zip(normalizadas.index, normalizadas.to_dict("records"), strict=True)
     ]
     resultado = transacoes.copy()
     resultado["risco"] = avaliacao["risco"]
