@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Clientes</h1>
+<form method="get" action="/balcao/clientes" class="envio">
+  <label>Pesquisar por nome, código ou documento <input name="q" value="{{ q }}" autocomplete="off" placeholder="Ana ou C0001"></label>
+  <button type="submit" class="principal">Pesquisar</button>
+  <a href="/balcao/clientes/novo">Novo cliente</a>
+</form>
+{% if lista %}
+<div class="rolagem"><table>
+  <thead><tr><th>Código</th><th>Nome</th><th>Documento</th><th>Cidade</th><th>Conta</th><th class="num">Saldo</th><th></th></tr></thead>
+  <tbody>
+  {% for c in lista %}
+    <tr>
+      <td>{{ c.codigo }}</td><td>{{ c.nome }}</td><td>{{ c.tipo_documento }} {{ c.numero_documento }}</td>
+      <td>{{ c.cidade }}</td><td>{{ c.conta.numero }}</td><td class="num">{{ c.conta.saldo|mtc }}</td>
+      <td><a href="/balcao/clientes/{{ c.id }}">Abrir ficha</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="ajuda">Nenhum cliente encontrado.</p>
+{% endif %}
+{% endblock %}

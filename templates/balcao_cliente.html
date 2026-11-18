@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>{{ c.nome }} <small>{{ c.codigo }}</small></h1>
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+<h2>Conta {{ conta.numero }} {% if conta.estado == 'bloqueada' %}<small>(Bloqueada)</small>{% else %}<small>(Ativa)</small>{% endif %}</h2>
+<table class="estreita">
+  <tr><th>Saldo</th><td class="num">{{ conta.saldo|mtc }}</td></tr>
+  <tr><th>Retido</th><td class="num">{{ conta.saldo_retido|mtc }}</td></tr>
+  <tr><th>Disponível</th><td class="num">{{ conta.disponivel|mtc }}</td></tr>
+</table>
+
+<h2 class="separado">Depósito</h2>
+<form method="post" action="/balcao/clientes/{{ c.id }}/deposito" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="1 500,00"></label>
+  <label>Descrição (opcional) <input name="descricao" maxlength="140" autocomplete="off"></label>
+  <button type="submit" class="principal">Depositar</button>
+</form>
+<form method="post" action="/balcao/clientes/{{ c.id }}/bloquear" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if conta.estado == 'bloqueada' %}
+  <input type="hidden" name="bloquear" value="0"><button type="submit" class="secundario">Desbloquear conta</button>
+  {% else %}
+  <input type="hidden" name="bloquear" value="1"><button type="submit" class="secundario">Bloquear conta</button>
+  {% endif %}
+</form>
+
+<h2 class="separado">Extrato</h2>
+{% if extrato %}
+<div class="rolagem"><table>
+  <thead><tr><th>Data</th><th>Tipo</th><th>Estado</th><th>Descrição</th><th class="num">Valor</th><th class="num">Saldo após</th></tr></thead>
+  <tbody>
+  {% for m in extrato %}
+    <tr>
+      <td>{{ m.momento.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ nomes_tipo.get(m.tipo, m.tipo) }}</td>
+      <td>{{ nomes_estado_mov.get(m.estado, m.estado) }}</td><td>{{ m.descricao or m.motivo or '' }}</td>
+      <td class="num">{{ m.valor|mtc }}</td><td class="num">{{ m.saldo_apos|mtc if m.saldo_apos is not none else '' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<p class="ajuda">Ainda sem movimentos.</p>{% endif %}
+
+<h2 class="separado">Dados do cliente</h2>
+<p class="ajuda">{{ c.tipo_documento }} {{ c.numero_documento }} · nascido em {{ c.data_nascimento.strftime('%d/%m/%Y') }}</p>
+<form method="post" action="/balcao/clientes/{{ c.id }}/editar" class="pilha">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Telefone <input name="telefone" value="{{ c.telefone }}" required inputmode="tel"></label>
+  <label>E-mail <input name="email" type="email" value="{{ c.email or '' }}"></label>
+  <label>Cidade
+    <select name="cidade">
+      {% for x in cidades %}<option value="{{ x }}" {% if c.cidade == x %}selected{% endif %}>{{ x|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Morada <input name="morada" value="{{ c.morada }}" required></label>
+  <button type="submit" class="principal">Gravar alterações</button>
+</form>
+<p><a href="/balcao/clientes">Voltar à lista</a></p>
+{% endblock %}

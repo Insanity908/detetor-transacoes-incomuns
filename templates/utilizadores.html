@@ -30,7 +30,7 @@
   <label>Nome completo <input name="nome" value="{{ valores.nome or '' }}" required autocomplete="off"></label>
   <label>Perfil
     <select name="perfil">
-      {% for p in perfis %}<option value="{{ p }}" {% if valores.perfil == p %}selected{% endif %}>{{ nomes_perfil[p] }}</option>{% endfor %}
+      {% for p in perfis %}<option value="{{ p }}" {% if (valores.perfil or 'analista') == p %}selected{% endif %}>{{ nomes_perfil[p] }}</option>{% endfor %}
     </select>
   </label>
   <label>Senha temporária <input name="senha" type="password" required autocomplete="new-password"></label>

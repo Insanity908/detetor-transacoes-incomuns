@@ -29,7 +29,6 @@ def test_balcao_na_raiz_vai_para_clientes(cliente_balcao):
     assert r.status_code == 302 and r.headers["Location"].endswith("/balcao/clientes")
 
 
-@pytest.mark.xfail(strict=True, reason="a rota /balcao/clientes chega na Tarefa 5")
 def test_analista_nao_abre_o_balcao(app_balcao):
     analista = criar_cliente(app_balcao, "analista")
     assert analista.get("/balcao/clientes").status_code == 403
@@ -64,3 +63,110 @@ def test_areas_dos_perfis(app_balcao):
     assert all(com("administrador").tem_area(a) for a in ("balcao", "alertas", "supervisao", "administracao"))
     assert not com("balcao").pode("analista") and com("balcao").pode("balcao")
     assert com("analista").pode("analista") and not com("analista").pode("supervisor")
+
+
+def test_balcao_pode_mudar_a_senha_por_post(app_balcao, cliente_balcao):
+    r = cliente_balcao.post("/conta/senha", data={"senha_atual": "senha-de-teste-123",
+                                                  "senha_nova": "Outra-Senha-Forte-456",
+                                                  "confirmacao": "Outra-Senha-Forte-456"})
+    assert r.status_code == 200 and "Senha alterada" in r.get_data(as_text=True)
+
+
+# ------------------------------------------------------------------ ecrãs do balcão
+DADOS = {"nome": "Ana Maria Sitoe", "data_nascimento": "1990-05-10", "tipo_documento": "NUIT",
+         "numero_documento": "123456789", "telefone": "841234567", "email": "ana@exemplo.mz",
+         "cidade": "MAPUTO", "morada": "Av. 24 de Julho 100"}
+
+
+def _acoes(app):
+    from sqlalchemy import select
+    from detector.banco import EventoAuditoria
+    with app.config["SESSOES"]() as s:
+        return [(e.acao, e.alvo) for e in s.scalars(select(EventoAuditoria))]
+
+
+def _novo(cliente_balcao, **extra):
+    return cliente_balcao.post("/balcao/clientes/novo", data={**DADOS, **extra})
+
+
+def test_criar_cliente_redireciona_para_a_ficha_e_audita(app_balcao, cliente_balcao):
+    r = _novo(cliente_balcao)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/balcao/clientes/1")
+    acoes = _acoes(app_balcao)
+    assert ("cliente_criado", "C0001") in acoes and ("conta_aberta", "C0001") in acoes
+    assert "Ana Maria Sitoe" in cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
+
+
+def test_formulario_invalido_da_400_com_mensagem(cliente_balcao):
+    r = _novo(cliente_balcao, telefone="123")
+    assert r.status_code == 400
+    assert "O telefone deve ter 9 dígitos e começar por 8." in r.get_data(as_text=True)
+
+
+def test_documento_repetido_da_400(cliente_balcao):
+    _novo(cliente_balcao)
+    r = _novo(cliente_balcao)
+    assert r.status_code == 400 and "Já existe um cliente" in r.get_data(as_text=True)
+
+
+def test_deposito_aparece_na_ficha(app_balcao, cliente_balcao):
+    _novo(cliente_balcao)
+    r = cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "1 500,00", "descricao": "Abertura"})
+    assert r.status_code == 302
+    pagina = cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
+    assert "1.500" in pagina and "Abertura" in pagina
+    assert ("deposito", "C0001") in _acoes(app_balcao)
+
+
+def test_deposito_invalido_da_400(cliente_balcao):
+    _novo(cliente_balcao)
+    for valor in ("abc", "-5", "0", ""):
+        r = cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": valor})
+        assert r.status_code == 400
+
+
+def test_pesquisa_por_parte_do_nome(cliente_balcao):
+    _novo(cliente_balcao)
+    assert "Ana Maria" in cliente_balcao.get("/balcao/clientes?q=maria").get_data(as_text=True)
+    assert "Ana Maria" not in cliente_balcao.get("/balcao/clientes?q=zzz").get_data(as_text=True)
+
+
+def test_editar_cliente(app_balcao, cliente_balcao):
+    _novo(cliente_balcao)
+    r = cliente_balcao.post("/balcao/clientes/1/editar", data={"telefone": "851111111", "email": "",
+                                                               "morada": "Rua Nova 1", "cidade": "BEIRA"})
+    assert r.status_code == 302 and ("cliente_alterado", "C0001") in _acoes(app_balcao)
+    assert cliente_balcao.post("/balcao/clientes/1/editar", data={"telefone": "1", "email": "",
+                                                                  "morada": "x", "cidade": "BEIRA"}).status_code == 400
+
+
+def test_bloquear_e_desbloquear(app_balcao, cliente_balcao):
+    _novo(cliente_balcao)
+    cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "1"})
+    assert "Bloqueada" in cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
+    assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 400
+    cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "0"})
+    assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 302
+    assert ("conta_bloqueada", "C0001") in _acoes(app_balcao)
+
+
+def test_cliente_inexistente_da_404(cliente_balcao):
+    assert cliente_balcao.get("/balcao/clientes/99").status_code == 404
+
+
+def test_administrador_usa_o_balcao(cliente):
+    assert cliente.get("/balcao/clientes").status_code == 200
+
+
+def test_analista_nao_deposita(app_balcao):
+    analista = criar_cliente(app_balcao, "analista")
+    assert analista.post("/balcao/clientes/1/deposito", data={"valor": "5"}).status_code == 403
+
+
+def test_balcao_funciona_sem_modelos(tmp_path):
+    app = criar_app(tmp_path / "vazia")
+    assert criar_cliente(app, "balcao").get("/balcao/clientes").status_code == 200
+
+
+def test_senha_do_utilizador_criado_pre_seleciona_analista(cliente):
+    assert 'value="analista" selected' in cliente.get("/utilizadores").get_data(as_text=True)

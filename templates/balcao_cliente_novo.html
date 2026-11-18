@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Novo cliente</h1>
+<form method="post" action="/balcao/clientes/novo" class="pilha">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Nome completo <input name="nome" value="{{ valores.nome or '' }}" required autocomplete="off"></label>
+  <label>Data de nascimento <input name="data_nascimento" value="{{ valores.data_nascimento or '' }}" required placeholder="AAAA-MM-DD"></label>
+  <label>Tipo de documento
+    <select name="tipo_documento">
+      {% for t in ('BI', 'NUIT') %}<option value="{{ t }}" {% if valores.tipo_documento == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Número do documento <input name="numero_documento" value="{{ valores.numero_documento or '' }}" required autocomplete="off"></label>
+  <label>Telefone <input name="telefone" value="{{ valores.telefone or '' }}" required inputmode="tel" placeholder="841234567"></label>
+  <label>E-mail (opcional) <input name="email" type="email" value="{{ valores.email or '' }}"></label>
+  <label>Cidade
+    <select name="cidade">
+      {% for c in cidades %}<option value="{{ c }}" {% if valores.cidade == c %}selected{% endif %}>{{ c|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Morada <input name="morada" value="{{ valores.morada or '' }}" required autocomplete="off"></label>
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  <button type="submit" class="principal">Registar cliente e abrir conta</button>
+</form>
+<p><a href="/balcao/clientes">Voltar à lista</a></p>
+{% endblock %}

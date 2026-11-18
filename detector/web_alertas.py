@@ -24,7 +24,8 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
     @app.context_processor
     def _contexto_alertas():
         u = utilizador_atual()
-        novas = alertas.contar_notificacoes(sessoes, u) if u is not None and not u.trocar_senha else 0
+        novas = (alertas.contar_notificacoes(sessoes, u)
+                 if u is not None and not u.trocar_senha and u.tem_area("alertas") else 0)
         return {"notificacoes_novas": novas, "nomes_estado": alertas.NOMES_ESTADO}
 
     @app.get("/alertas")

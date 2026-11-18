@@ -36,6 +36,11 @@ ACOES = {
     "utilizador_alterado": "Alterou utilizador",
     "senha_redefinida": "Redefiniu senha de utilizador",
     "senha_alterada": "Alterou a própria senha",
+    "cliente_criado": "Criou ficha de cliente",
+    "conta_aberta": "Abriu conta bancária",
+    "cliente_alterado": "Alterou ficha de cliente",
+    "deposito": "Registou depósito",
+    "conta_desbloqueada": "Desbloqueou conta bancária",
 }
 POR_PAGINA = 50
 
