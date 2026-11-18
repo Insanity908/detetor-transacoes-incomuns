@@ -23,6 +23,7 @@ from .banco import ESTADOS_ABERTOS, Alerta, ContaBancaria, EventoAlerta, Movimen
 NOMES_ESTADO = {"novo": "Novo", "em_analise": "Em análise", "fraude": "Fraude confirmada",
                 "falso_alarme": "Falso alarme", "recusado_auto": "Recusado automaticamente"}
 DECISOES = ("fraude", "falso_alarme")
+ENCERRADOS = DECISOES + ("recusado_auto",)  # o recusado automaticamente não se reabre
 VISTAS = {"abertos": "Abertos", "novos": "Novos", "meus": "Os meus", "encerrados": "Encerrados"}
 NIVEIS = ("Alto risco", "Atenção")
 POR_PAGINA = 50
@@ -94,7 +95,7 @@ def listar(sessoes: sessionmaker, u: Utilizador, filtro: Filtro = Filtro(),
     elif filtro.vista == "meus":
         consulta = consulta.where(Alerta.estado == "em_analise", Alerta.atribuido_a == u.id)
     elif filtro.vista == "encerrados":
-        consulta = consulta.where(Alerta.estado.in_(DECISOES))
+        consulta = consulta.where(Alerta.estado.in_(ENCERRADOS))
     else:
         consulta = consulta.where(Alerta.estado.in_(ESTADOS_ABERTOS))
     if filtro.nivel in NIVEIS:
@@ -120,7 +121,7 @@ def contar_por_vista(sessoes: sessionmaker, u: Utilizador) -> dict[str, int]:
             return sessao.scalar(_visiveis(select(func.count(Alerta.id)), u).where(*condicoes)) or 0
         return {"abertos": n(Alerta.estado.in_(ESTADOS_ABERTOS)), "novos": n(Alerta.estado == "novo"),
                 "meus": n(Alerta.estado == "em_analise", Alerta.atribuido_a == u.id),
-                "encerrados": n(Alerta.estado.in_(DECISOES))}
+                "encerrados": n(Alerta.estado.in_(ENCERRADOS))}
 
 
 def obter(sessoes: sessionmaker, alerta_id: int) -> Alerta | None:

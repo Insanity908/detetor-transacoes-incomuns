@@ -94,7 +94,7 @@
     </form>
     {% endif %}
 
-    {% if ve_tudo and a.estado not in abertos %}
+    {% if ve_tudo and a.estado not in abertos and a.estado != 'recusado_auto' %}
     <form method="post" action="/alertas/{{ a.id }}/reabrir" class="pilha caixa">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Motivo para reabrir <textarea name="texto" rows="2" required minlength="5" maxlength="2000">{{ rascunho }}</textarea></label>

@@ -562,3 +562,17 @@ def test_indicadores_valor_retido_e_protegido(app):
 def test_painel_mostra_cartoes_retido_e_protegido(app):
     html = criar_cliente(app, "supervisor").get("/painel").get_data(as_text=True)
     assert "Valor retido" in html and "Valor protegido" in html and "0,00 MT" in html
+
+
+def test_recusado_auto_aparece_em_encerrados_sem_formulario_de_reabrir(app, artefatos_pequenos, monkeypatch):
+    i, _, _, _ = _retido(app, artefatos_pequenos, monkeypatch)
+    with _sessoes(app)() as s:
+        s.execute(update(Alerta).where(Alerta.id == i).values(estado="recusado_auto"))
+        s.commit()
+    sup = criar_cliente(app, "supervisor", "sup")
+    lista, total = alertas.listar(_sessoes(app), sup.utilizador, alertas.Filtro(vista="encerrados"))
+    assert total == 1 and lista[0].id == i
+    assert alertas.contar_por_vista(_sessoes(app), sup.utilizador)["encerrados"] == 1
+    assert alertas.listar(_sessoes(app), sup.utilizador)[1] == 0
+    pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
+    assert f"/alertas/{i}/reabrir" not in pagina
