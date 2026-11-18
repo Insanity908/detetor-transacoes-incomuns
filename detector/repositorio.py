@@ -9,6 +9,7 @@ import pandas as pd
 from sqlalchemy import func, insert, select
 from sqlalchemy.orm import sessionmaker
 
+from .alertas import criar_para_analise
 from .banco import Analise, TransacaoAvaliada
 
 COLUNAS = ("id_transacao", "cliente", "data_hora", "valor", "cidade", "pais", "categoria",
@@ -17,8 +18,12 @@ ORIGENS = ("ficheiro", "formulario", "exemplo")
 
 
 def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str, modelo: str,
-                    nome_ficheiro: str | None = None, utilizador_id: int | None = None) -> str:
-    """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface."""
+                    nome_ficheiro: str | None = None, utilizador_id: int | None = None,
+                    gerar_alertas: bool = False) -> str:
+    """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface.
+
+    Com gerar_alertas, cada transação com alerta entra na fila de alertas, na mesma transação do banco.
+    """
     if origem not in ORIGENS:
         raise ValueError(f"Origem desconhecida: {origem}")
     chave = secrets.token_urlsafe(16)
@@ -49,6 +54,8 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
         sessao.flush()
         if linhas:
             sessao.execute(insert(TransacaoAvaliada), [l | {"analise_id": analise.id} for l in linhas])
+        if gerar_alertas:
+            criar_para_analise(sessao, analise.id, analise.criada_em)
     return chave
 
 

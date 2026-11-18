@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import pandas as pd
 from flask import Flask, Response, abort, g, jsonify, render_template, request, send_from_directory
 from flask.logging import default_handler
 
-from detector import acesso, repositorio
+from detector import acesso, correio, repositorio, web_alertas
 from detector.acesso import auditar, utilizador_atual
 from detector.artefatos import carregar
 from detector.banco import criar_fabrica_sessoes, criar_motor, descrever, migrar, verificar_ligacao
@@ -35,10 +36,11 @@ RAIZ = Path(__file__).parent
 CAMPOS = ("cliente", "data_hora", "valor", "cidade", "pais", "categoria")
 MAX_LINHAS_TABELA = 500
 ANALISES_RECENTES = 10
-VERSAO = "1.2.0"
+VERSAO = "1.3.0"
 # Páginas que funcionam sem modelos treinados: contas, utilizadores e auditoria.
 SEM_MODELOS = frozenset({"static", "saude", "entrar", "entrar_post", "sair", "senha", "senha_post", "utilizadores",
-                         "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria"})
+                         "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria",
+                         *web_alertas.ENDPOINTS})
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
 INICIO_PERIGOSO = ("\t", "\r")
@@ -111,6 +113,18 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     def _pct(valor):
         return "—" if valor is None else f"{formatar_decimal(100 * float(valor))}%"
 
+    @app.template_filter("motivos")
+    def _motivos(valor):
+        return json.loads(valor) if isinstance(valor, str) else list(valor or [])
+
+    @app.template_filter("horas")
+    def _horas(valor):
+        if valor is None:
+            return "—"
+        if valor < 1:
+            return f"{max(1, round(valor * 60))} min"
+        return f"{formatar_decimal(valor)} h" if valor < 48 else f"{formatar_decimal(valor / 24)} dias"
+
     @app.template_filter("categoria")
     def _categoria(valor):
         return nome_categoria(str(valor).strip().upper())
@@ -124,6 +138,7 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
         g.inicio = time.perf_counter()
 
     acesso.instalar(app, sessoes, registo, cfg.sessao_horas, cfg.producao)  # login, perfis, CSRF e auditoria
+    web_alertas.instalar(app, sessoes)  # fila de alertas, painel e notificações
 
     @app.before_request
     def _exige_modelos():
@@ -234,8 +249,9 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
         resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes)
         resultado = resultado.sort_values("risco", ascending=False, kind="stable").reset_index(drop=True)
         chave = repositorio.guardar_analise(sessoes, resultado, "ficheiro", _modelo(), ficheiro.filename,
-                                            utilizador_atual().id)
+                                            utilizador_atual().id, gerar_alertas=True)
         n_alertas = int((resultado["nivel"] != "Normal").sum())
+        correio.avisar_alertas(cfg, ficheiro.filename[:200], int((resultado["nivel"] == "Alto risco").sum()), n_alertas)
         registo.info("Ficheiro '%s' analisado: %d transações, %d com alerta", ficheiro.filename,
                      len(resultado), n_alertas)
         auditar("analisar_ficheiro", alvo=chave,

@@ -39,6 +39,7 @@ class Utilizador(Base):
     versao_sessao: Mapped[int] = mapped_column(Integer, default=1)  # muda para terminar as sessões abertas
     criado_em: Mapped[datetime] = mapped_column(DateTime)
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime)
+    ultimo_alerta_visto: Mapped[int] = mapped_column(Integer, default=0)  # para o sino de notificações
 
     def pode(self, perfil_minimo: str) -> bool:
         return PERFIS.index(self.perfil) >= PERFIS.index(perfil_minimo)
@@ -156,3 +157,41 @@ def verificar_ligacao(motor: Engine) -> bool:
         return True
     except Exception:
         return False
+
+
+ESTADOS_ALERTA = ("novo", "em_analise", "fraude", "falso_alarme")
+ESTADOS_ABERTOS = ("novo", "em_analise")
+
+
+class Alerta(Base):
+    """Uma transação com alerta (alto risco ou atenção), à espera de ser investigada e decidida."""
+    __tablename__ = "alertas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    transacao_id: Mapped[int] = mapped_column(ForeignKey("transacoes_avaliadas.id", ondelete="CASCADE"),
+                                              unique=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, index=True)
+    estado: Mapped[str] = mapped_column(String(20), index=True)  # novo | em_analise | fraude | falso_alarme
+    atribuido_a: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"), index=True)
+    atribuido_em: Mapped[datetime | None] = mapped_column(DateTime)
+    decidido_por: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"))
+    decidido_em: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+
+    transacao: Mapped[TransacaoAvaliada] = relationship(lazy="joined")
+    responsavel: Mapped[Utilizador | None] = relationship(foreign_keys=[atribuido_a], lazy="joined")
+    decisor: Mapped[Utilizador | None] = relationship(foreign_keys=[decidido_por], lazy="joined")
+
+
+class EventoAlerta(Base):
+    """Histórico de um alerta: atribuições, mudanças de estado e comentários, pela ordem em que aconteceram."""
+    __tablename__ = "eventos_alerta"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    alerta_id: Mapped[int] = mapped_column(ForeignKey("alertas.id", ondelete="CASCADE"), index=True)
+    momento: Mapped[datetime] = mapped_column(DateTime)
+    utilizador_id: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"))
+    nome_utilizador: Mapped[str] = mapped_column(String(50))
+    tipo: Mapped[str] = mapped_column(String(20))  # atribuicao | estado | comentario
+    de: Mapped[str | None] = mapped_column(String(50))
+    para: Mapped[str | None] = mapped_column(String(50))
+    texto: Mapped[str | None] = mapped_column(Text)

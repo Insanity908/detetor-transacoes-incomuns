@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,6 +28,18 @@ class Configuracao:
     porta: int
     threads: int
     sessao_horas: int = 8
+    smtp_servidor: str = ""  # vazio = sem e-mail
+    smtp_porta: int = 587
+    smtp_utilizador: str = ""
+    smtp_senha: str = field(default="", repr=False)
+    smtp_remetente: str = ""
+    smtp_tls: bool = True
+    email_alertas: tuple[str, ...] = ()
+    url_publica: str = ""
+
+    @property
+    def email_ativo(self) -> bool:
+        return bool(self.smtp_servidor and self.email_alertas)
 
     @property
     def producao(self) -> bool:
@@ -66,6 +78,25 @@ def _chave_local() -> str:
     return chave
 
 
+def _booleano(nome: str, padrao: bool) -> bool:
+    texto = os.environ.get(nome, "").strip().lower()
+    if not texto:
+        return padrao
+    if texto in ("1", "sim", "true", "verdadeiro"):
+        return True
+    if texto in ("0", "nao", "não", "false", "falso"):
+        return False
+    raise ValueError(f"{nome} tem de ser sim ou nao (recebido: '{texto}')")
+
+
+def _emails(nome: str) -> tuple[str, ...]:
+    enderecos = tuple(e.strip() for e in os.environ.get(nome, "").replace(";", ",").split(",") if e.strip())
+    for e in enderecos:
+        if "@" not in e or " " in e:
+            raise ValueError(f"{nome} tem um endereço de e-mail inválido: '{e}'")
+    return enderecos
+
+
 def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
     if ficheiro_env is not None and Path(ficheiro_env).exists():
         load_dotenv(ficheiro_env, override=False, encoding="utf-8")
@@ -101,4 +132,12 @@ def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
         porta=_inteiro("PORTA", 5000, 1, 65535),
         threads=_inteiro("THREADS", 4, 1, 64),
         sessao_horas=_inteiro("SESSAO_HORAS", 8, 1, 24 * 7),
+        smtp_servidor=os.environ.get("SMTP_SERVIDOR", "").strip(),
+        smtp_porta=_inteiro("SMTP_PORTA", 587, 1, 65535),
+        smtp_utilizador=os.environ.get("SMTP_UTILIZADOR", "").strip(),
+        smtp_senha=os.environ.get("SMTP_SENHA", ""),
+        smtp_remetente=os.environ.get("SMTP_REMETENTE", "").strip(),
+        smtp_tls=_booleano("SMTP_TLS", True),
+        email_alertas=_emails("EMAIL_ALERTAS"),
+        url_publica=os.environ.get("URL_PUBLICA", "").strip().rstrip("/"),
     )

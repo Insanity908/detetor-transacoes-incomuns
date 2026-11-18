@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Painel</h1>
+<nav class="separadores" aria-label="Período">
+  {% for d in periodos %}<a href="/painel?dias={{ d }}" {% if ind.dias == d %}aria-current="page"{% endif %}>Últimos {{ d }} dias</a>{% endfor %}
+</nav>
+<p class="ajuda">Desde {{ ind.inicio.strftime('%d/%m/%Y') }}. O valor em risco e os alertas abertos são os de agora, seja qual for o período.</p>
+
+<div class="indicadores">
+  <div class="indicador">
+    <p class="rotulo">Alertas criados</p>
+    <p class="numero">{{ ind.criados }}</p>
+    <p class="nota">{{ ind.abertos.novo }} novo(s) e {{ ind.abertos.em_analise }} em análise agora</p>
+  </div>
+  <div class="indicador">
+    <p class="rotulo">Taxa de falsos alarmes</p>
+    <p class="numero">{{ ind.taxa_falsos | pct }}</p>
+    <p class="nota">{{ ind.falsos }} de {{ ind.decididos }} alerta(s) decidido(s)</p>
+  </div>
+  <div class="indicador">
+    <p class="rotulo">Valor em risco</p>
+    <p class="numero">{{ ind.valor_em_risco | mt }}</p>
+    <p class="nota">em alertas abertos, {{ ind.valor_em_risco_alto | mt }} de alto risco</p>
+  </div>
+  <div class="indicador">
+    <p class="rotulo">Tempo médio até à decisão</p>
+    <p class="numero">{{ ind.horas_decisao | horas }}</p>
+    <p class="nota">{% if ind.horas_decisao_mediana is not none %}mediana {{ ind.horas_decisao_mediana | horas }}{% else %}nenhuma decisão no período{% endif %}</p>
+  </div>
+</div>
+<p class="ajuda">Fraude confirmada no período: <strong>{{ ind.fraudes }}</strong> alerta(s), {{ ind.valor_fraude | mt }}.</p>
+
+<h2 class="separado" id="titulo-grafico">Alertas criados por dia</h2>
+<div class="grafico-dias" role="img" aria-labelledby="titulo-grafico" aria-describedby="tabela-dias-resumo">
+  <div class="eixo-y" aria-hidden="true"><span>{{ maximo }}</span><span>0</span></div>
+  <div class="barras" style="--n: {{ ind.por_dia | length }}">
+    {% for d in ind.por_dia %}
+    <div class="dia" title="{{ d.dia.strftime('%d/%m') }}: {{ d.total }} alerta(s) — {{ d.alto }} alto risco, {{ d.atencao }} atenção">
+      <span class="barra" style="height: {{ (100 * d.total / maximo) | round(1) }}%"></span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="eixo-x" aria-hidden="true">
+    <span>{{ ind.por_dia[0].dia.strftime('%d/%m') }}</span><span>{{ ind.por_dia[-1].dia.strftime('%d/%m') }}</span>
+  </div>
+</div>
+<details class="tabela-dados">
+  <summary id="tabela-dias-resumo">Ver os números de cada dia</summary>
+  <div class="rolagem"><table class="estreita">
+    <thead><tr><th>Dia</th><th class="num">Alto risco</th><th class="num">Atenção</th><th class="num">Total</th></tr></thead>
+    <tbody>{% for d in ind.por_dia | reverse %}<tr><td>{{ d.dia.strftime('%d/%m/%Y') }}</td><td class="num">{{ d.alto }}</td>
+      <td class="num">{{ d.atencao }}</td><td class="num">{{ d.total }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</details>
+
+<h2 class="separado">Por pessoa</h2>
+<div class="rolagem"><table>
+  <thead><tr><th>Utilizador</th><th class="num">Em análise agora</th><th class="num">Decididos</th><th class="num">Fraudes</th>
+    <th class="num">Falsos alarmes</th><th class="num">Tempo médio até à decisão</th></tr></thead>
+  <tbody>
+  {% for p in ind.por_pessoa %}
+    <tr><td>{{ p.nome }}</td><td class="num">{{ p.em_analise }}</td><td class="num">{{ p.decididos }}</td>
+      <td class="num">{{ p.fraudes }}</td><td class="num">{{ p.falsos }}</td><td class="num">{{ p.horas_decisao | horas }}</td></tr>
+  {% else %}
+    <tr><td colspan="6" class="ajuda">Ninguém trabalhou alertas neste período.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

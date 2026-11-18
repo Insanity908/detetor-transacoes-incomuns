@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block conteudo %}
+<h1>Alertas</h1>
+<p class="ajuda">Transações com alerta dos ficheiros analisados. Assuma um alerta novo para o investigar e encerre-o
+  como <strong>fraude confirmada</strong> ou <strong>falso alarme</strong>.
+  {% if not ve_tudo %}Vê os alertas novos e os seus.{% endif %}</p>
+
+<nav class="separadores" aria-label="Vistas da fila">
+  {% for codigo, nome in vistas.items() %}
+  <a href="/alertas?vista={{ codigo }}" {% if filtro.vista == codigo %}aria-current="page"{% endif %}>{{ nome }} <span class="contador">{{ contagens[codigo] }}</span></a>
+  {% endfor %}
+</nav>
+
+<form method="get" action="/alertas" class="envio filtros">
+  <input type="hidden" name="vista" value="{{ filtro.vista }}">
+  <label>Nível
+    <select name="nivel"><option value="">Todos</option>
+      {% for n in niveis %}<option value="{{ n }}" {% if filtro.nivel == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Cliente <input name="cliente" value="{{ filtro.cliente }}" autocomplete="off" placeholder="C0001"></label>
+  {% if ve_tudo %}
+  <label>Responsável
+    <select name="responsavel"><option value="">Todos</option>
+      {% for r in responsaveis %}<option value="{{ r.id }}" {% if filtro.responsavel == r.id %}selected{% endif %}>{{ r.nome }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <button type="submit" class="principal">Filtrar</button>
+</form>
+
+<p><strong>{{ total }}</strong> alerta(s){% if paginas > 1 %} · página {{ pagina }} de {{ paginas }}{% endif %}.</p>
+<div class="rolagem"><table class="fila">
+  <thead><tr><th class="num">N.º</th><th class="num">Risco</th><th>Nível</th><th>Cliente</th><th>Data e hora</th>
+    <th class="num">Valor</th><th>Motivo principal</th><th>Estado</th><th>Responsável</th></tr></thead>
+  <tbody>
+  {% for a in alertas %}{% set t = a.transacao %}
+    <tr>
+      <td class="num"><a href="/alertas/{{ a.id }}">#{{ a.id }}</a></td>
+      <td class="num">{{ t.risco | nota }}</td>
+      <td><span class="etiqueta nivel-{{ classe_nivel[t.nivel] }}">{{ t.nivel }}</span></td>
+      <td>{{ t.cliente }}</td><td>{{ t.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td class="num">{{ t.valor | mt }}</td>
+      <td>{{ (t.motivos | motivos | first) or '—' }}</td>
+      <td><span class="estado estado-{{ a.estado }}">{{ nomes_estado[a.estado] }}</span></td>
+      <td>{{ a.responsavel.nome if a.responsavel else '—' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="ajuda">Nenhum alerta nesta vista.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% if paginas > 1 %}
+<p class="acoes">
+  {% if pagina > 1 %}<a href="/alertas?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina - 1 }}">← Anteriores</a>{% endif %}
+  {% if pagina < paginas %}<a href="/alertas?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina + 1 }}">Seguintes →</a>{% endif %}
+</p>
+{% endif %}
+{% endblock %}

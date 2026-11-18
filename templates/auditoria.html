@@ -28,6 +28,7 @@
       <td class="num">{{ e.momento.strftime('%d/%m/%Y %H:%M:%S') }}</td><td>{{ e.nome_utilizador }}</td>
       <td>{{ acoes.get(e.acao, e.acao) }}</td>
       <td>{% if e.acao in ('analisar_ficheiro', 'consultar_analise', 'descarregar_analise') and e.alvo %}<a href="/analisar/{{ e.alvo | urlencode }}">{{ e.alvo[:10] }}…</a>
+          {% elif e.acao.endswith('_alerta') and e.alvo %}<a href="/alertas/{{ e.alvo | urlencode }}">alerta #{{ e.alvo }}</a>
           {% elif e.alvo %}<a href="/auditoria?alvo={{ e.alvo | urlencode }}">{{ e.alvo }}</a>{% else %}—{% endif %}</td>
       <td>{{ e.detalhe or '' }}</td><td>{{ e.ip or '' }}</td>
     </tr>
@@ -38,8 +39,8 @@
 </table></div>
 {% if paginas > 1 %}
 <p class="acoes">
-  {% if pagina > 1 %}<a href="/auditoria?{{ consulta | urlencode }}&amp;pagina={{ pagina - 1 }}">← Mais recentes</a>{% endif %}
-  {% if pagina < paginas %}<a href="/auditoria?{{ consulta | urlencode }}&amp;pagina={{ pagina + 1 }}">Mais antigos →</a>{% endif %}
+  {% if pagina > 1 %}<a href="/auditoria?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina - 1 }}">← Mais recentes</a>{% endif %}
+  {% if pagina < paginas %}<a href="/auditoria?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina + 1 }}">Mais antigos →</a>{% endif %}
 </p>
 {% endif %}
 {% endblock %}

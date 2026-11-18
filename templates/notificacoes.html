@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Notificações</h1>
+<p class="ajuda">Alertas novos de alto risco que chegaram desde a última vez que abriu esta página.</p>
+{% if lista %}
+<ul class="lista-simples">
+  {% for a in lista %}{% set t = a.transacao %}
+  <li><a href="/alertas/{{ a.id }}">Alerta #{{ a.id }}</a> · risco {{ t.risco | nota }} · cliente {{ t.cliente }} ·
+    {{ t.valor | mt }} · {{ a.criado_em.strftime('%d/%m/%Y %H:%M') }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="vazio">Não há alertas novos de alto risco.</p>
+{% endif %}
+<p><a href="/alertas?vista=novos&amp;nivel=Alto+risco">Ver todos os alertas novos de alto risco</a></p>
+{% endblock %}

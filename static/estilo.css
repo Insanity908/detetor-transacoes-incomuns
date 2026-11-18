@@ -113,3 +113,50 @@ table.estreita { max-width: 32rem; }
 .sucesso { color: var(--normal); font-weight: 600; }
 .separado { margin-top: 2rem; }
 .filtros label { flex: 1 1 10rem; }
+
+/* Alertas, painel e notificações */
+.sino { position: relative; display: inline-flex; align-items: center; }
+.contagem-sino { position: absolute; top: -.1rem; right: -.35rem; min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem;
+  border-radius: .6rem; background: var(--alto); color: #fff; font-size: .7rem; font-weight: 700; line-height: 1.15rem; text-align: center; }
+.aviso { padding: .6rem .9rem; border-radius: 3px; border: 1px solid; margin: 0 0 1rem; font-weight: 600; }
+.aviso-sucesso { color: var(--normal); border-color: var(--normal); background: #edf6f0; }
+.aviso-erro { color: var(--alto); border-color: var(--alto); background: #fbeeed; }
+.separadores { display: flex; flex-wrap: wrap; gap: .25rem; border-bottom: 2px solid var(--linha); margin: 1rem 0; }
+.separadores a { padding: .45rem .8rem; color: var(--tinta-suave); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.separadores a[aria-current="page"] { color: var(--tinta); border-bottom-color: var(--acao); font-weight: 600; }
+.contador { font-size: .8rem; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.estado { display: inline-block; font-size: .8rem; font-weight: 600; padding: .05rem .45rem; border-radius: 2px; white-space: nowrap;
+  border: 1px solid var(--linha); color: var(--tinta-suave); vertical-align: middle; }
+.estado-novo { color: var(--acao); border-color: var(--acao); }
+.estado-em_analise { color: var(--tinta); border-color: var(--tinta); }
+.estado-fraude { color: var(--alto); border-color: var(--alto); }
+.estado-falso_alarme { color: var(--normal); border-color: var(--normal); }
+h1 .estado { font-size: .9rem; margin-left: .5rem; }
+.caixa { background: var(--superficie); border: 1px solid var(--linha); border-radius: 3px; padding: 1rem; margin: 1rem 0; }
+fieldset.opcoes { border: 0; padding: 0; margin: 0; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+fieldset.opcoes legend { font-size: .9rem; font-weight: 600; padding: 0; margin-bottom: .3rem; }
+textarea { font: inherit; font-weight: 400; color: inherit; background: var(--superficie); border: 1px solid #9aa7b3;
+  border-radius: 3px; padding: .45rem .6rem; width: 100%; resize: vertical; }
+.historico { list-style: none; padding: 0; margin: .5rem 0 1rem; border-left: 2px solid var(--linha); }
+.historico li { padding: .35rem 0 .35rem 1rem; }
+.historico .quando { display: block; font-size: .8rem; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.historico blockquote { margin: .3rem 0 0; padding: .4rem .7rem; background: var(--superficie); border: 1px solid var(--linha); border-radius: 3px; white-space: pre-wrap; }
+.lista-simples { padding-left: 1.2rem; display: grid; gap: .3rem; }
+.indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem; margin: 1rem 0; }
+.indicador { background: var(--superficie); border: 1px solid var(--linha); border-radius: 3px; padding: .9rem 1rem; }
+.indicador p { margin: 0; }
+.indicador .rotulo { font-size: .82rem; color: var(--tinta-suave); text-transform: uppercase; letter-spacing: .05em; }
+.indicador .numero { font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.indicador .nota { font-size: .85rem; color: var(--tinta-suave); }
+.grafico-dias { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 10rem auto; gap: .25rem .5rem;
+  background: var(--superficie); border: 1px solid var(--linha); border-radius: 3px; padding: .75rem; }
+.eixo-y { display: flex; flex-direction: column; justify-content: space-between; font-size: .75rem; color: var(--tinta-suave);
+  text-align: right; font-variant-numeric: tabular-nums; }
+.barras { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; align-items: end;
+  border-bottom: 1px solid var(--tinta-suave); }
+.dia { height: 100%; display: flex; align-items: flex-end; }
+.dia:hover .barra { background: var(--tinta); }
+.barra { display: block; width: 100%; background: var(--acao); border-radius: 4px 4px 0 0; }
+.eixo-x { grid-column: 2; display: flex; justify-content: space-between; font-size: .75rem; color: var(--tinta-suave); }
+.tabela-dados { margin: .5rem 0 0; }
+.tabela-dados summary { cursor: pointer; color: var(--acao); font-weight: 600; }

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block titulo %}Alerta #{{ a.id }} · Detetor de Fraudes Financeiras{% endblock %}
+{% block conteudo %}
+<p><a href="/alertas">← Alertas</a></p>
+<h1>Alerta #{{ a.id }} <span class="estado estado-{{ a.estado }}">{{ nomes_estado[a.estado] }}</span></h1>
+<p class="ajuda">Criado em {{ a.criado_em.strftime('%d/%m/%Y às %H:%M') }}
+  {% if a.responsavel %} · responsável <strong>{{ a.responsavel.nome }}</strong>{% endif %}
+  {% if a.decidido_em %} · decidido por <strong>{{ a.decisor.nome if a.decisor else '—' }}</strong>
+    em {{ a.decidido_em.strftime('%d/%m/%Y às %H:%M') }}{% endif %}</p>
+
+<div class="colunas">
+  <section aria-labelledby="titulo-transacao">
+    <div class="leitura nivel-{{ classe_nivel[t.nivel] }}">
+      <p class="selo" id="titulo-transacao">{{ t.nivel }}</p>
+      <dl class="medidas">
+        <div><dt>Risco</dt><dd>{{ t.risco | nota }}<small>/100</small></dd></div>
+        <div><dt>Anomalia</dt><dd>{{ t.anomalia | nota }}<small>/100</small></dd></div>
+      </dl>
+      {% set lista_motivos = t.motivos | motivos %}
+      {% if lista_motivos %}
+      <h3>Porque parece estranha</h3>
+      <ul class="motivos">{% for m in lista_motivos %}<li>{{ m }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+    <dl class="ficha">
+      <div><dt>Cliente</dt><dd><a href="/perfil?cliente={{ t.cliente | urlencode }}">{{ t.cliente }}</a></dd></div>
+      <div><dt>Data e hora</dt><dd>{{ t.data_hora.strftime('%d/%m/%Y %H:%M') }}</dd></div>
+      <div><dt>Valor</dt><dd>{{ t.valor | mt }}</dd></div>
+      <div><dt>Local</dt><dd>{{ t.cidade | title }} · {{ t.pais | upper }}</dd></div>
+      <div><dt>Categoria</dt><dd>{{ t.categoria | categoria }}</dd></div>
+      <div><dt>Transação</dt><dd>{{ t.id_transacao }}</dd></div>
+    </dl>
+    {% if outros %}
+    <h3>Outros alertas deste cliente</h3>
+    <ul class="lista-simples">
+      {% for o in outros %}
+      <li><a href="/alertas/{{ o.id }}">#{{ o.id }}</a> · {{ o.transacao.data_hora.strftime('%d/%m/%Y %H:%M') }} ·
+        {{ o.transacao.valor | mt }} · {{ nomes_estado[o.estado] }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="titulo-acoes" id="acoes">
+    <h2 id="titulo-acoes">Investigação</h2>
+    {% if a.estado == 'novo' %}
+    <form method="post" action="/alertas/{{ a.id }}/assumir" class="pilha">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="principal">Assumir este alerta</button>
+    </form>
+    {% endif %}
+
+    {% if pode_trabalhar %}
+    <form method="post" action="/alertas/{{ a.id }}/decidir" class="pilha caixa">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <fieldset class="opcoes">
+        <legend>Decisão</legend>
+        <label class="opcao"><input type="radio" name="decisao" value="fraude" required> Fraude confirmada</label>
+        <label class="opcao"><input type="radio" name="decisao" value="falso_alarme" required> Falso alarme</label>
+      </fieldset>
+      <label>Justificação <textarea name="texto" rows="3" required minlength="5" maxlength="2000"
+        placeholder="O que foi verificado e porquê esta decisão">{{ rascunho }}</textarea></label>
+      <button type="submit" class="principal">Encerrar alerta</button>
+    </form>
+    <form method="post" action="/alertas/{{ a.id }}/devolver" class="pilha">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="secundario">Devolver à fila</button>
+    </form>
+    {% endif %}
+
+    {% if ve_tudo and a.estado in abertos %}
+    <form method="post" action="/alertas/{{ a.id }}/atribuir" class="envio">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Atribuir a
+        <select name="responsavel">
+          {% for r in responsaveis %}<option value="{{ r.id }}" {% if a.atribuido_a == r.id %}selected{% endif %}>{{ r.nome }} ({{ nomes_perfil[r.perfil] | lower }})</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="secundario">Atribuir</button>
+    </form>
+    {% endif %}
+
+    {% if ve_tudo and a.estado not in abertos %}
+    <form method="post" action="/alertas/{{ a.id }}/reabrir" class="pilha caixa">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Motivo para reabrir <textarea name="texto" rows="2" required minlength="5" maxlength="2000">{{ rascunho }}</textarea></label>
+      <button type="submit" class="secundario">Reabrir alerta</button>
+    </form>
+    {% endif %}
+
+    <h3>Histórico e comentários</h3>
+    <ol class="historico">
+      <li><span class="quando">{{ a.criado_em.strftime('%d/%m/%Y %H:%M') }}</span> Alerta criado pela análise do ficheiro.</li>
+      {% for e in historico %}
+      <li class="evento-{{ e.tipo }}"><span class="quando">{{ e.momento.strftime('%d/%m/%Y %H:%M') }}</span>
+        <strong>{{ e.nome_utilizador }}</strong>
+        {% if e.tipo == 'comentario' %}comentou:
+        {% elif e.tipo == 'atribuicao' %}{% if e.para %}atribuiu o alerta a {{ e.para }}{% else %}retirou o responsável ({{ e.de }}){% endif %}
+        {% else %}mudou o estado de {{ nomes_estado.get(e.de, e.de) }} para {{ nomes_estado.get(e.para, e.para) }}{% endif %}
+        {% if e.texto %}<blockquote>{{ e.texto }}</blockquote>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <form method="post" action="/alertas/{{ a.id }}/comentar" class="pilha">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Novo comentário <textarea name="texto" rows="2" required maxlength="2000">{% if not pode_trabalhar and a.estado in abertos %}{{ rascunho }}{% endif %}</textarea></label>
+      <button type="submit" class="secundario">Comentar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

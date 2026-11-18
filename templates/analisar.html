@@ -33,7 +33,8 @@
 <div class="resumo">
   {% if analise.nome_ficheiro %}<p class="ajuda">Ficheiro <strong>{{ analise.nome_ficheiro }}</strong>,
     analisado em {{ analise.criada_em.strftime('%d/%m/%Y às %H:%M') }}.</p>{% endif %}
-  <p><strong>{{ total }}</strong> transações analisadas, <strong>{{ alertas }}</strong> com alerta (alto risco ou atenção).</p>
+  <p><strong>{{ total }}</strong> transações analisadas, <strong>{{ alertas }}</strong> com alerta (alto risco ou atenção).
+    {% if alertas and analise.origem == 'ficheiro' %}Os alertas entraram na <a href="/alertas?vista=novos">fila de alertas</a>.{% endif %}</p>
   <p class="acoes">
     {% if so_alertas %}<a href="/analisar/{{ chave }}">Mostrar todas</a>{% else %}<a href="/analisar/{{ chave }}?alertas=1">Mostrar só os alertas</a>{% endif %}
     <a href="/analisar/{{ chave }}.csv" class="botao">Descarregar resultado em CSV</a>
