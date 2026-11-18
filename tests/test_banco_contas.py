@@ -23,7 +23,9 @@ def _novo(sessoes, **extra):
 
 
 @pytest.mark.parametrize("texto,esperado", [("1234,50", 123450), ("1 234,50", 123450), ("1.234,50", 123450),
-                                            ("1234.5", 123450), (10, 1000), (1234.5, 123450)])
+                                            ("1234.5", 123450), (10, 1000), (1234.5, 123450),
+                                            ("1.500", 150000), ("10.000", 1000000), ("1234.50", 123450),
+                                            ("999.999", 99999900)])
 def test_para_centavos_aceita(texto, esperado):
     assert dinheiro.para_centavos(texto) == esperado
 

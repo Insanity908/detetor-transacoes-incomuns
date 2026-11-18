@@ -8,7 +8,7 @@ MAXIMO_CENTAVOS = 10_000_000_000  # 100 milhões MT
 
 
 def para_centavos(texto: str | int | float) -> int:
-    """Converte "1 234,50", "1.234,50", "1234.5" ou um número em cêntimos; recusa o que não for um valor válido."""
+    """Converte "1 234,50", "1.234,50", "1.500" (milhares), "1234.5" ou um número em cêntimos; recusa o que não for um valor válido."""
     if isinstance(texto, bool):
         raise ValueError("Valor inválido.")
     if isinstance(texto, (int, float)):
@@ -24,7 +24,8 @@ def para_centavos(texto: str | int | float) -> int:
         raise ValueError("Indique um valor.")
     if "," in bruto:
         bruto = bruto.replace(".", "").replace(",", ".")  # vírgula decimal, ponto de milhares
-    elif bruto.count(".") > 1:
+    elif bruto.count(".") > 1 or re.fullmatch(r"[1-9][0-9]{0,2}\.[0-9]{3}", bruto):
+        # vários pontos, ou um só ponto seguido de três algarismos ("1.500"): separador de milhares
         if not re.fullmatch(r"-?[0-9]{1,3}(\.[0-9]{3})+", bruto):
             raise ValueError("Valor inválido: use apenas algarismos, por exemplo 1 234,50.")
         bruto = bruto.replace(".", "")
