@@ -789,3 +789,13 @@ def test_estatisticas_contam_recusas_por_saldo_e_retencoes():
     est.registar(env, {})
     assert (est.recusadas_saldo, est.retidas) == (1, 1)
     assert "recusadas por saldo 1 · retidas 1" in simulador.resumo(est, datetime(2026, 5, 1))
+
+
+def test_id_reutilizado_por_outro_cliente_nao_mistura_a_avaliacao(app, chave, monkeypatch):
+    """O resultado de uma transação de conta vem da avaliação do MESMO cliente, não de quem usou o id antes."""
+    primeira = _api(app, chave, json=_transacao(1, cliente="C0001")).json["resultados"][0]
+    _forcar(monkeypatch, "Alto risco", 70.0)
+    _cliente_banco(app, saldo=100_000)
+    res = _api(app, chave, json=_transacao(1, cliente="B0001", valor=150.0)).json["resultados"][0]
+    assert res["movimento"]["estado"] == "retido" and res["risco"] == 70.0
+    assert res["alerta_id"] and res["alerta_id"] != primeira["alerta_id"]

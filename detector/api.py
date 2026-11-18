@@ -299,8 +299,9 @@ def receber_transacoes():
             continue
         decisoes = {p.id_transacao: d for p, d in zip(pedidos, decididas)}
         break
+    dono = {transacoes.at[i, "id_transacao"]: codigos[i] for i in transacoes.index[do_banco]}
     avaliadas = repositorio.resultados_api(
-        sessoes, [i for i, d in decisoes.items() if d.nivel is not None] + list(vistos))
+        sessoes, [i for i, d in decisoes.items() if d.nivel is not None] + list(vistos), clientes=dono)
 
     resultados = []
     for id_transacao in transacoes["id_transacao"]:

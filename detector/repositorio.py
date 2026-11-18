@@ -141,8 +141,11 @@ def historico_api(sessoes: sessionmaker, clientes: set[str], desde: datetime) ->
     return df
 
 
-def resultados_api(sessoes: sessionmaker, ids: list[str]) -> dict[str, dict]:
-    """O resultado já gravado de cada id_transacao recebido antes pela API (para não avaliar duas vezes)."""
+def resultados_api(sessoes: sessionmaker, ids: list[str], clientes: dict[str, str] | None = None) -> dict[str, dict]:
+    """O resultado já gravado de cada id_transacao recebido antes pela API (para não avaliar duas vezes).
+
+    Com `clientes` (id -> código do cliente), só conta a avaliação desse cliente: um id reutilizado por outro
+    cliente não pode trazer o risco nem o alerta alheios."""
     from .banco import Alerta
     if not ids:
         return {}
@@ -154,6 +157,8 @@ def resultados_api(sessoes: sessionmaker, ids: list[str]) -> dict[str, dict]:
     resultado = {}
     with sessoes() as sessao:
         for t, alerta_id, estado in sessao.execute(consulta):
+            if clientes is not None and clientes.get(t.id_transacao) != t.cliente:
+                continue
             resultado.setdefault(t.id_transacao, {
                 "id_transacao": t.id_transacao, "cliente": t.cliente, "data_hora": t.data_hora, "valor": t.valor,
                 "risco": t.risco, "anomalia": t.anomalia, "nivel": t.nivel, "motivos": json.loads(t.motivos),
