@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Detetor de Fraudes Financeiras{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+  {% block cabeca %}{% endblock %}
 </head>
 <body>
   <header>
@@ -23,6 +24,7 @@
         {% endif %}
         {% if utilizador.pode('administrador') %}
         <a href="/utilizadores" {% if aba and aba.startswith('utilizador') %}aria-current="page"{% endif %}>Utilizadores</a>
+        <a href="/chaves" {% if aba and (aba.startswith('chave') or aba == 'api_docs') %}aria-current="page"{% endif %}>API</a>
         {% endif %}
       </nav>
       {% endif %}

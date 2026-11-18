@@ -175,7 +175,7 @@ def test_nota_nunca_arredonda_para_o_limite(cliente):
 
 
 def test_pagina_de_envio_avisa_a_espera(cliente):
-    assert "pode demorar até um minuto" in cliente.get("/analisar").get_data(as_text=True)
+    assert "analisados em segundo plano" in cliente.get("/analisar").get_data(as_text=True)
 
 
 # --------------------------------------------- pontos menores da revisão final

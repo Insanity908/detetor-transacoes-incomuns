@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Chaves da API</h1>
+<p class="ajuda">Cada sistema que envia transações (por exemplo, o simulador) usa a sua chave. A chave só aparece uma vez,
+  ao ser criada: guarde-a num sítio seguro. Uma chave revogada deixa de funcionar de imediato.
+  Veja a <a href="/api/docs">documentação da API</a>.</p>
+
+{% if nova %}
+<div class="caixa chave-nova" role="status">
+  <p><strong>Chave “{{ nova.nome }}” criada.</strong> Copie-a agora; não volta a ser mostrada.</p>
+  <p><code class="chave">{{ nova.chave }}</code></p>
+  <p class="ajuda">Para o simulador: <code>python simulador.py --chave {{ nova.chave }}</code></p>
+</div>
+{% endif %}
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+<div class="rolagem"><table>
+  <thead><tr><th>Nome</th><th>Início</th><th class="num">Limite/min</th><th>Criada</th><th>Último uso</th>
+    <th class="num">Pedidos</th><th class="num">Transações</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for c in chaves %}
+    <tr>
+      <td>{{ c.nome }}</td><td><code>{{ c.prefixo }}…</code></td><td class="num">{{ c.limite_por_minuto }}</td>
+      <td>{{ c.criada_em.strftime('%d/%m/%Y') }} por {{ c.criada_por }}</td>
+      <td>{{ c.ultimo_uso.strftime('%d/%m/%Y %H:%M') if c.ultimo_uso else 'Nunca' }}</td>
+      <td class="num">{{ c.pedidos }}</td><td class="num">{{ c.transacoes }}</td>
+      <td>{{ 'Ativa' if c.ativa else 'Revogada' }}</td>
+      <td>{% if c.ativa %}<form method="post" action="/chaves/{{ c.id }}/revogar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="secundario">Revogar</button></form>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="ajuda">Ainda não há chaves.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2 class="separado">Criar chave</h2>
+<form method="post" action="/chaves" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Nome (quem a vai usar) <input name="nome" value="{{ valores.nome or '' }}" required minlength="3" maxlength="80"
+    placeholder="Simulador de transações" autocomplete="off"></label>
+  <label>Pedidos por minuto <input name="limite" inputmode="numeric" value="{{ valores.limite or limite_padrao }}"></label>
+  <button type="submit" class="principal">Criar chave</button>
+</form>
+{% endblock %}

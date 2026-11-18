@@ -13,10 +13,10 @@ import time
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, Response, abort, g, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask.logging import default_handler
 
-from detector import acesso, correio, repositorio, web_alertas
+from detector import acesso, api, repositorio, tarefas, web_alertas, web_api
 from detector.acesso import auditar, utilizador_atual
 from detector.artefatos import carregar
 from detector.banco import criar_fabrica_sessoes, criar_motor, descrever, migrar, verificar_ligacao
@@ -36,11 +36,11 @@ RAIZ = Path(__file__).parent
 CAMPOS = ("cliente", "data_hora", "valor", "cidade", "pais", "categoria")
 MAX_LINHAS_TABELA = 500
 ANALISES_RECENTES = 10
-VERSAO = "1.3.0"
+VERSAO = "1.4.0"
 # Páginas que funcionam sem modelos treinados: contas, utilizadores e auditoria.
 SEM_MODELOS = frozenset({"static", "saude", "entrar", "entrar_post", "sair", "senha", "senha_post", "utilizadores",
                          "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria",
-                         *web_alertas.ENDPOINTS})
+                         *web_alertas.ENDPOINTS, *web_api.ENDPOINTS, "tarefa"})
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
 INICIO_PERIGOSO = ("\t", "\r")
@@ -139,10 +139,14 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
 
     acesso.instalar(app, sessoes, registo, cfg.sessao_horas, cfg.producao)  # login, perfis, CSRF e auditoria
     web_alertas.instalar(app, sessoes)  # fila de alertas, painel e notificações
+    api.instalar(app)  # API REST v1 (chaves, limite de pedidos)
+    web_api.instalar(app, sessoes)  # documentação da API e gestão das chaves
+    fila = app.config["FILA"] = tarefas.FilaTarefas(sessoes, cfg.pasta_envios, lambda: app.config["ARTEFATOS"], cfg)
+    fila.retomar()  # ficheiros que ficaram por processar quando o servidor parou
 
     @app.before_request
     def _exige_modelos():
-        if app.config["ARTEFATOS"] is None and request.endpoint not in SEM_MODELOS:
+        if app.config["ARTEFATOS"] is None and request.endpoint not in SEM_MODELOS and not api.e_pedido_api():
             return render_template("sem_modelos.html"), 503
         return None
 
@@ -157,7 +161,17 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
 
     @app.errorhandler(500)
     def _erro_interno(_):  # o Flask já registou o erro completo em app.logger
+        if api.e_pedido_api():
+            return api.erro(500, "erro_interno", "Erro inesperado; ficou registado no servidor.")
         return render_template("erro.html"), 500
+
+    @app.errorhandler(404)
+    def _nao_encontrado(exc):
+        return api.erro(404, "nao_encontrado", "Endereço da API desconhecido.") if api.e_pedido_api() else exc
+
+    @app.errorhandler(405)
+    def _metodo(exc):
+        return api.erro(405, "metodo_nao_permitido", "Método não permitido neste endereço.") if api.e_pedido_api() else exc
 
     @app.get("/saude")
     def saude():
@@ -229,9 +243,11 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             linhas = visiveis.to_dict("records")
         recentes = repositorio.listar_analises(sessoes, "ficheiro", ANALISES_RECENTES,
                                                None if _ve_tudo() else utilizador_atual().id)
+        em_curso = fila.listar_do_utilizador(None if _ve_tudo() else utilizador_atual().id)
         return render_template("analisar.html", erro=erro, chave=chave if analise is not None else None,
                                analise=analise, linhas=linhas, total=total, alertas=alertas, so_alertas=so_alertas,
-                               limite=MAX_LINHAS_TABELA, recentes=recentes, ve_tudo=_ve_tudo()), estado
+                               limite=MAX_LINHAS_TABELA, recentes=recentes, ve_tudo=_ve_tudo(),
+                               em_curso=em_curso, linhas_segundo_plano=cfg.linhas_segundo_plano), estado
 
     @app.get("/analisar")
     def analisar():
@@ -242,21 +258,28 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
         ficheiro = request.files.get("ficheiro")
         if ficheiro is None or not ficheiro.filename:
             return _analisar(erro="Escolha um ficheiro CSV para enviar.", estado=400)
+        conteudo = ficheiro.read()
         try:
-            transacoes = validar(ler_csv(ficheiro.read()))
+            transacoes = validar(ler_csv(conteudo))  # validar já aqui: os erros aparecem logo, mesmo nos grandes
         except ValueError as exc:
             return _analisar(erro=str(exc), estado=400)
-        resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes)
-        resultado = resultado.sort_values("risco", ascending=False, kind="stable").reset_index(drop=True)
-        chave = repositorio.guardar_analise(sessoes, resultado, "ficheiro", _modelo(), ficheiro.filename,
-                                            utilizador_atual().id, gerar_alertas=True)
-        n_alertas = int((resultado["nivel"] != "Normal").sum())
-        correio.avisar_alertas(cfg, ficheiro.filename[:200], int((resultado["nivel"] == "Alto risco").sum()), n_alertas)
-        registo.info("Ficheiro '%s' analisado: %d transações, %d com alerta", ficheiro.filename,
-                     len(resultado), n_alertas)
+        if len(transacoes) >= cfg.linhas_segundo_plano:
+            tarefa = fila.submeter(conteudo, ficheiro.filename, len(transacoes), utilizador_atual().id)
+            return redirect(url_for("tarefa", chave=tarefa))
+        chave, total, n_alertas = tarefas.analisar_ficheiro(app.config["ARTEFATOS"], sessoes, cfg, transacoes,
+                                                            ficheiro.filename, utilizador_atual().id)
         auditar("analisar_ficheiro", alvo=chave,
-                detalhe=f"{ficheiro.filename[:200]}: {len(resultado)} transações, {n_alertas} com alerta")
+                detalhe=f"{ficheiro.filename[:200]}: {total} transações, {n_alertas} com alerta")
         return _analisar(chave=chave)
+
+    @app.get("/analisar/tarefa/<chave>")
+    def tarefa(chave):
+        t = fila.obter(chave)
+        if t is None or not (_ve_tudo() or t.utilizador_id == utilizador_atual().id):
+            abort(404)
+        if t.estado == "concluida" and t.analise_chave:
+            return redirect(url_for("analisar_ver", chave=t.analise_chave))
+        return render_template("tarefa.html", t=t)
 
     @app.get("/analisar/<chave>.csv")
     def analisar_download(chave):
@@ -275,6 +298,8 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
 
     @app.errorhandler(413)
     def _grande_demais(_):
+        if api.e_pedido_api():
+            return api.erro(413, "pedido_grande_demais", "O pedido passa de 5 MB; divida-o em lotes menores.")
         if utilizador_atual() is None:
             return render_template("erro.html", titulo="Pedido grande demais", mensagem="O pedido passa de 5 MB."), 413
         return _analisar(erro="O ficheiro passa de 5 MB.", estado=413)

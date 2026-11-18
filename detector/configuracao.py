@@ -36,6 +36,8 @@ class Configuracao:
     smtp_tls: bool = True
     email_alertas: tuple[str, ...] = ()
     url_publica: str = ""
+    pasta_envios: Path = RAIZ / "instancia" / "envios"  # ficheiros à espera do processamento em segundo plano
+    linhas_segundo_plano: int = 2000  # a partir daqui, o ficheiro é analisado em segundo plano
 
     @property
     def email_ativo(self) -> bool:
@@ -140,4 +142,6 @@ def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
         smtp_tls=_booleano("SMTP_TLS", True),
         email_alertas=_emails("EMAIL_ALERTAS"),
         url_publica=os.environ.get("URL_PUBLICA", "").strip().rstrip("/"),
+        pasta_envios=_caminho(os.environ.get("PASTA_ENVIOS", "instancia/envios")),
+        linhas_segundo_plano=_inteiro("LINHAS_SEGUNDO_PLANO", 2000, 1, 10_000_000),
     )

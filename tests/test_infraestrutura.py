@@ -163,5 +163,6 @@ def test_env_exemplo_tem_todas_as_variaveis():
     texto = (Path(__file__).parent.parent / ".env.exemplo").read_text(encoding="utf-8")
     for nome in ("AMBIENTE", "CHAVE_SECRETA", "URL_BANCO", "PASTA_MODELOS", "PASTA_LOGS", "NIVEL_LOG",
                  "HOST", "PORTA", "THREADS", "SESSAO_HORAS", "SMTP_SERVIDOR", "SMTP_PORTA",
-                 "SMTP_UTILIZADOR", "SMTP_SENHA", "SMTP_REMETENTE", "SMTP_TLS", "EMAIL_ALERTAS", "URL_PUBLICA"):
+                 "SMTP_UTILIZADOR", "SMTP_SENHA", "SMTP_REMETENTE", "SMTP_TLS", "EMAIL_ALERTAS", "URL_PUBLICA",
+                 "LINHAS_SEGUNDO_PLANO", "PASTA_ENVIOS"):
         assert re.search(rf"^{nome}=", texto, re.M), nome

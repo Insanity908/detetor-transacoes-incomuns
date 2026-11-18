@@ -23,7 +23,7 @@ class ClienteComCsrf(FlaskClient):
 
     def post(self, *args, **kwargs):
         dados = kwargs.get("data") or {}
-        if isinstance(dados, dict) and "csrf_token" not in dados:
+        if "json" not in kwargs and isinstance(dados, dict) and "csrf_token" not in dados:
             with self.session_transaction() as sessao:
                 sessao.setdefault("csrf_token", "token-de-teste")
                 kwargs["data"] = {**dados, "csrf_token": sessao["csrf_token"]}  # cópia: não muda o dict do teste
@@ -52,6 +52,7 @@ def ambiente_de_teste(tmp_path, monkeypatch):
     monkeypatch.setenv("CHAVE_SECRETA", CHAVE_TESTE)
     monkeypatch.setenv("URL_BANCO", "sqlite:///" + (tmp_path / "teste.db").as_posix())
     monkeypatch.setenv("PASTA_LOGS", str(tmp_path / "logs"))
+    monkeypatch.setenv("PASTA_ENVIOS", str(tmp_path / "envios"))
     monkeypatch.setenv("NIVEL_LOG", "WARNING")
     return tmp_path
 

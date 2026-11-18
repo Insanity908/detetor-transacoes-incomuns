@@ -5,13 +5,25 @@
 <p class="ajuda">Envie um CSV com as colunas <code>cliente, data_hora, valor, cidade, pais, categoria</code>
   (<code>id_transacao</code> é opcional), até 5 MB. Ficheiros do Excel em português, com <code>;</code> e vírgula decimal, também são aceites.
   O histórico de cada cliente vem dos dados de treino e das linhas anteriores do próprio ficheiro.
-  Um ficheiro grande, perto dos 5 MB, pode demorar até um minuto a ser analisado.</p>
+  Ficheiros com {{ linhas_segundo_plano }} transações ou mais são analisados em segundo plano: pode continuar a trabalhar
+  e o resultado aparece em Análises recentes.</p>
 <form method="post" action="/analisar" enctype="multipart/form-data" class="envio">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Ficheiro CSV <input type="file" name="ficheiro" accept=".csv,text/csv" required></label>
   <button type="submit" class="principal">Analisar</button>
 </form>
 {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+{% if em_curso and not chave %}
+<h2>Em processamento</h2>
+<ul class="lista-simples">
+  {% for t in em_curso %}
+  <li><a href="/analisar/tarefa/{{ t.chave }}">{{ t.nome_ficheiro }}</a> · {{ t.linhas }} transações ·
+    {% if t.estado == 'falhou' %}<span class="erro">falhou</span>{% elif t.estado == 'a_processar' %}a analisar{% else %}na fila{% endif %}
+    · {{ t.criada_em.strftime('%d/%m %H:%M') }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
 
 {% if recentes and not chave %}
 <h2>Análises recentes</h2>

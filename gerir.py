@@ -7,6 +7,7 @@ Execução, na raiz do projeto:
     python gerir.py verificar           mostra a configuração e se o banco e os modelos estão prontos
     python gerir.py criar-admin         cria uma conta de administrador (pede o nome e a senha)
     python gerir.py desbloquear NOME    reativa uma conta e limpa o bloqueio por tentativas falhadas
+    python gerir.py criar-chave NOME    cria uma chave da API (por exemplo, para o simulador) e mostra-a uma vez
 """
 from __future__ import annotations
 
@@ -105,6 +106,17 @@ def desbloquear(nome_utilizador: str) -> int:
     return 0
 
 
+def criar_chave(nome: str, limite: int) -> str:
+    from detector import auditoria, chaves_api
+    sessoes = _sessoes()
+    chave, registo = chaves_api.criar(sessoes, nome, "gerir.py", limite)
+    auditoria.registar(sessoes, "chave_criada", nome_utilizador="gerir.py", alvo=registo.prefixo,
+                       detalhe=f"{registo.nome}; {registo.limite_por_minuto}/min (linha de comandos)")
+    print(f"Chave '{registo.nome}' criada. Guarde-a: não volta a ser mostrada.\n\n    {chave}\n")
+    print(f"Para o simulador:  python simulador.py --chave {chave}")
+    return chave
+
+
 def verificar() -> int:
     from detector.artefatos import carregar
     from detector.banco import criar_motor, descrever, verificar_ligacao
@@ -142,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     comandos.add_parser("criar-admin", help="cria uma conta de administrador")
     d = comandos.add_parser("desbloquear", help="reativa e desbloqueia uma conta")
     d.add_argument("nome_utilizador")
+    k = comandos.add_parser("criar-chave", help="cria uma chave da API")
+    k.add_argument("nome", help="quem a vai usar, por exemplo Simulador")
+    k.add_argument("--limite", type=int, default=600, help="pedidos por minuto (600 por omissão)")
     args = analisador.parse_args(argv)
 
     try:
@@ -166,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             criar_admin_interativo()
         elif args.comando == "desbloquear":
             return desbloquear(args.nome_utilizador)
+        elif args.comando == "criar-chave":
+            criar_chave(args.nome, args.limite)
     except ValueError as exc:
         print(f"Erro na configuração (.env): {exc}", file=sys.stderr)
         return 1

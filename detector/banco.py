@@ -65,7 +65,7 @@ class Analise(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     chave: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    origem: Mapped[str] = mapped_column(String(20))  # ficheiro | formulario | exemplo
+    origem: Mapped[str] = mapped_column(String(20))  # ficheiro | formulario | exemplo | api
     nome_ficheiro: Mapped[str | None] = mapped_column(String(255))
     criada_em: Mapped[datetime] = mapped_column(DateTime, index=True)
     total: Mapped[int] = mapped_column(Integer)
@@ -73,6 +73,9 @@ class Analise(Base):
     modelo: Mapped[str] = mapped_column(String(50))  # classificador escolhido no treino
     utilizador_id: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"),
                                                       index=True)  # quem pediu; vazio nas análises da Fase 1
+
+    chave_api_id: Mapped[int | None] = mapped_column(ForeignKey("chaves_api.id", ondelete="SET NULL"),
+                                                     index=True)  # nas transações recebidas pela API
 
     utilizador: Mapped[Utilizador | None] = relationship(lazy="joined")
 
@@ -87,7 +90,7 @@ class TransacaoAvaliada(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     analise_id: Mapped[int] = mapped_column(ForeignKey("analises.id", ondelete="CASCADE"), index=True)
     ordem: Mapped[int] = mapped_column(Integer)
-    id_transacao: Mapped[str] = mapped_column(String(100))
+    id_transacao: Mapped[str] = mapped_column(String(100), index=True)
     cliente: Mapped[str] = mapped_column(String(100), index=True)
     data_hora: Mapped[datetime] = mapped_column(DateTime)
     valor: Mapped[float] = mapped_column(Float)
@@ -99,6 +102,10 @@ class TransacaoAvaliada(Base):
     nivel: Mapped[str] = mapped_column(String(20), index=True)
     motivos: Mapped[str] = mapped_column(Text)  # lista em JSON
     historico_curto: Mapped[bool] = mapped_column(Boolean)
+    # Só nas transações do simulador: o que o gerador marcou. Nunca aparece aos analistas (enviesaria a decisão);
+    # serve para medir o desempenho e, na Fase 5, para comparar com as decisões.
+    fraude_simulada: Mapped[bool | None] = mapped_column(Boolean)
+    tipo_fraude_simulada: Mapped[str | None] = mapped_column(String(30))
 
     analise: Mapped[Analise] = relationship(back_populates="transacoes")
 
@@ -197,3 +204,40 @@ class EventoAlerta(Base):
     de: Mapped[str | None] = mapped_column(String(50))
     para: Mapped[str | None] = mapped_column(String(50))
     texto: Mapped[str | None] = mapped_column(Text)
+
+
+class ChaveApi(Base):
+    """Chave de acesso à API. Só se guarda o SHA-256: a chave completa aparece uma única vez, ao ser criada."""
+    __tablename__ = "chaves_api"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nome: Mapped[str] = mapped_column(String(80))
+    prefixo: Mapped[str] = mapped_column(String(16), index=True)  # início da chave, para a reconhecer
+    hash: Mapped[str] = mapped_column(String(64), unique=True)
+    limite_por_minuto: Mapped[int] = mapped_column(Integer)
+    ativa: Mapped[bool] = mapped_column(Boolean, default=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime)
+    criada_por: Mapped[str] = mapped_column(String(50))
+    ultimo_uso: Mapped[datetime | None] = mapped_column(DateTime)
+    pedidos: Mapped[int] = mapped_column(Integer, default=0)
+    transacoes: Mapped[int] = mapped_column(Integer, default=0)
+
+
+ESTADOS_TAREFA = ("pendente", "a_processar", "concluida", "falhou")
+
+
+class Tarefa(Base):
+    """Um ficheiro grande analisado em segundo plano."""
+    __tablename__ = "tarefas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chave: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    estado: Mapped[str] = mapped_column(String(20), index=True)
+    nome_ficheiro: Mapped[str] = mapped_column(String(255))
+    linhas: Mapped[int] = mapped_column(Integer)
+    utilizador_id: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"), index=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime)
+    iniciada_em: Mapped[datetime | None] = mapped_column(DateTime)
+    concluida_em: Mapped[datetime | None] = mapped_column(DateTime)
+    analise_chave: Mapped[str | None] = mapped_column(String(32))
+    erro: Mapped[str | None] = mapped_column(Text)

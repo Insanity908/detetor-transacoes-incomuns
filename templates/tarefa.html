@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}{{ t.nome_ficheiro }} · Detetor de Fraudes Financeiras{% endblock %}
+{% block cabeca %}{% if t.estado in ('pendente', 'a_processar') %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block conteudo %}
+<p><a href="/analisar">← Analisar ficheiro</a></p>
+<h1>{{ t.nome_ficheiro }}</h1>
+{% if t.estado == 'pendente' %}
+<p role="status"><strong>Na fila.</strong> O ficheiro tem {{ t.linhas }} transações e vai ser analisado em segundo plano.
+  Pode sair desta página: o resultado fica em <a href="/analisar">Análises recentes</a> e os alertas na fila.</p>
+{% elif t.estado == 'a_processar' %}
+<p role="status"><strong>A analisar</strong> {{ t.linhas }} transações desde as {{ t.iniciada_em.strftime('%H:%M:%S') }}.
+  Esta página atualiza-se sozinha.</p>
+{% else %}
+<p class="erro" role="alert">A análise falhou: {{ t.erro }}</p>
+<p>Corrija o ficheiro e envie-o de novo.</p>
+{% endif %}
+<p class="ajuda">Enviado em {{ t.criada_em.strftime('%d/%m/%Y às %H:%M') }}.</p>
+{% endblock %}

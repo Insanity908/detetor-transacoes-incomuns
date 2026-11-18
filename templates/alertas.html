@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set classe_nivel = {"Alto risco": "alto", "Atenção": "atencao", "Normal": "normal"} %}
+{% block cabeca %}{% if auto %}<meta http-equiv="refresh" content="{{ intervalo }}">{% endif %}{% endblock %}
 {% block conteudo %}
 <h1>Alertas</h1>
 <p class="ajuda">Transações com alerta dos ficheiros analisados. Assuma um alerta novo para o investigar e encerre-o
@@ -14,6 +15,7 @@
 
 <form method="get" action="/alertas" class="envio filtros">
   <input type="hidden" name="vista" value="{{ filtro.vista }}">
+  {% if auto %}<input type="hidden" name="auto" value="1">{% endif %}
   <label>Nível
     <select name="nivel"><option value="">Todos</option>
       {% for n in niveis %}<option value="{{ n }}" {% if filtro.nivel == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
@@ -30,7 +32,10 @@
   <button type="submit" class="principal">Filtrar</button>
 </form>
 
-<p><strong>{{ total }}</strong> alerta(s){% if paginas > 1 %} · página {{ pagina }} de {{ paginas }}{% endif %}.</p>
+<p class="acoes"><span><strong>{{ total }}</strong> alerta(s){% if paginas > 1 %} · página {{ pagina }} de {{ paginas }}{% endif %}.</span>
+  {% if auto %}<span class="ajuda">A atualizar a cada {{ intervalo }} s.</span>
+  <a href="/alertas?{{ consulta | urlencode }}">Parar a atualização</a>
+  {% else %}<a href="/alertas?{{ (consulta | urlencode ~ '&') if consulta }}auto=1">Atualizar automaticamente</a>{% endif %}</p>
 <div class="rolagem"><table class="fila">
   <thead><tr><th class="num">N.º</th><th class="num">Risco</th><th>Nível</th><th>Cliente</th><th>Data e hora</th>
     <th class="num">Valor</th><th>Motivo principal</th><th>Estado</th><th>Responsável</th></tr></thead>
@@ -53,8 +58,8 @@
 </table></div>
 {% if paginas > 1 %}
 <p class="acoes">
-  {% if pagina > 1 %}<a href="/alertas?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina - 1 }}">← Anteriores</a>{% endif %}
-  {% if pagina < paginas %}<a href="/alertas?{{ consulta | urlencode ~ '&' if consulta }}pagina={{ pagina + 1 }}">Seguintes →</a>{% endif %}
+  {% if pagina > 1 %}<a href="/alertas?{{ consulta_pag | urlencode ~ '&' if consulta_pag }}pagina={{ pagina - 1 }}">← Anteriores</a>{% endif %}
+  {% if pagina < paginas %}<a href="/alertas?{{ consulta_pag | urlencode ~ '&' if consulta_pag }}pagina={{ pagina + 1 }}">Seguintes →</a>{% endif %}
 </p>
 {% endif %}
 {% endblock %}

@@ -27,6 +27,8 @@ ACOES = {
     "decidir_alerta": "Decidiu alerta",
     "reabrir_alerta": "Reabriu alerta",
     "comentar_alerta": "Comentou alerta",
+    "chave_criada": "Criou chave da API",
+    "chave_revogada": "Revogou chave da API",
     "utilizador_criado": "Criou utilizador",
     "utilizador_alterado": "Alterou utilizador",
     "senha_redefinida": "Redefiniu senha de utilizador",

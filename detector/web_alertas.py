@@ -13,6 +13,7 @@ from .banco import ESTADOS_ABERTOS
 ENDPOINTS = frozenset({"fila_alertas", "alerta", "alerta_acao", "painel", "ver_notificacoes"})
 ACOES = ("assumir", "atribuir", "devolver", "decidir", "reabrir", "comentar")
 PERIODOS = (7, 30, 90)
+INTERVALO_AUTO = 15  # segundos
 
 
 def _inteiro(texto: str | None, padrao: int | None = None) -> int | None:
@@ -36,11 +37,17 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
                                 responsavel=_inteiro(a.get("responsavel")) if alertas.ve_tudo(u) else None)
         pagina = _inteiro(a.get("pagina"), 1) or 1
         lista, total = alertas.listar(sessoes, u, filtro, pagina)
-        consulta = {k: v for k, v in a.items() if k != "pagina" and v}
+        auto = a.get("auto") == "1"  # a fila recarrega-se sozinha: os alertas da API aparecem sem clicar
+        consulta = {k: v for k, v in a.items() if k not in ("pagina", "auto") and v}
+        if auto:
+            consulta_pag = consulta | {"auto": "1"}
+        else:
+            consulta_pag = consulta
         return render_template(
             "alertas.html", alertas=lista, total=total, filtro=filtro, pagina=pagina,
             paginas=max(1, -(-total // alertas.POR_PAGINA)), vistas=alertas.VISTAS,
             contagens=alertas.contar_por_vista(sessoes, u), niveis=alertas.NIVEIS, consulta=consulta,
+            consulta_pag=consulta_pag, auto=auto, intervalo=INTERVALO_AUTO,
             ve_tudo=alertas.ve_tudo(u),
             responsaveis=alertas.responsaveis_possiveis(sessoes) if alertas.ve_tudo(u) else [])
 

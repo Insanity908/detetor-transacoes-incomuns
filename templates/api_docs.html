@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}API · Detetor de Fraudes Financeiras{% endblock %}
+{% block conteudo %}
+<h1>API v{{ espec.info.version }}</h1>
+<p class="ajuda">{{ espec.info.description }}</p>
+<p class="acoes"><a href="/api/v1/openapi.json">Especificação OpenAPI (JSON)</a>
+  <span class="ajuda">Abra-a no Swagger Editor, no Swagger UI, no Postman ou no Insomnia para experimentar os pedidos.</span></p>
+
+<h2 class="separado">Autenticação</h2>
+<p>Envie a chave em cada pedido, no cabeçalho <code>Authorization: Bearer dtf_…</code> (ou <code>X-Chave-API: dtf_…</code>).
+  Cada chave tem um limite de pedidos por minuto; acima dele a resposta é <code>429</code> com o cabeçalho
+  <code>Retry-After</code>. As chaves são criadas pelo administrador em <a href="/chaves">Chaves da API</a>.</p>
+
+<h2 class="separado">Endereços</h2>
+{% for op in operacoes %}
+<section class="operacao">
+  <h3><span class="metodo metodo-{{ op.metodo | lower }}">{{ op.metodo }}</span> <code>{{ op.caminho }}</code></h3>
+  <p>{{ op.summary }}{% if op.description %}. {{ op.description }}{% endif %}</p>
+  {% if op.responses %}
+  <p class="ajuda">Respostas:
+    {% for codigo, r in op.responses.items() %}<code>{{ codigo }}</code> {{ r.description }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endif %}
+</section>
+{% endfor %}
+
+<h2 class="separado">Campos de cada transação</h2>
+<div class="rolagem"><table>
+  <thead><tr><th>Campo</th><th>Obrigatório</th><th>Tipo</th><th>Regras e notas</th><th>Exemplo</th></tr></thead>
+  <tbody>
+  {% for c in campos %}
+    <tr><td><code>{{ c.nome }}</code></td><td>{{ 'Sim' if c.obrigatorio else 'Não' }}</td><td>{{ c.type }}</td>
+      <td>{{ c.description or '' }}
+        {% if c.maxLength %} Até {{ c.maxLength }} caracteres.{% endif %}
+        {% if c.pattern %} Padrão <code>{{ c.pattern }}</code>.{% endif %}</td>
+      <td>{% if c.example is defined %}<code>{{ c.example }}</code>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="ajuda">Campos desconhecidos são recusados. Se uma transação do lote for inválida, nada é gravado e a resposta
+  <code>422</code> lista todos os problemas, com o índice de cada transação.</p>
+
+<h2 class="separado">Exemplo</h2>
+<pre class="codigo">curl -X POST {{ base }}/api/v1/transacoes \
+  -H "Authorization: Bearer dtf_..." \
+  -H "Content-Type: application/json" \
+  -d '{{ exemplo }}'</pre>
+{% endblock %}

@@ -14,12 +14,12 @@ from .banco import Analise, TransacaoAvaliada
 
 COLUNAS = ("id_transacao", "cliente", "data_hora", "valor", "cidade", "pais", "categoria",
            "risco", "anomalia", "nivel", "motivos", "historico_curto")
-ORIGENS = ("ficheiro", "formulario", "exemplo")
+ORIGENS = ("ficheiro", "formulario", "exemplo", "api")
 
 
 def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str, modelo: str,
                     nome_ficheiro: str | None = None, utilizador_id: int | None = None,
-                    gerar_alertas: bool = False) -> str:
+                    gerar_alertas: bool = False, chave_api_id: int | None = None) -> str:
     """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface.
 
     Com gerar_alertas, cada transação com alerta entra na fila de alertas, na mesma transação do banco.
@@ -42,6 +42,9 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
             "nivel": str(r["nivel"]),
             "motivos": json.dumps(list(r["motivos"]), ensure_ascii=False),
             "historico_curto": bool(r.get("historico_curto", False)),
+            "fraude_simulada": None if pd.isna(r.get("fraude_simulada")) else bool(r["fraude_simulada"]),
+            "tipo_fraude_simulada": (str(r["tipo_fraude_simulada"])[:30] or None)
+            if isinstance(r.get("tipo_fraude_simulada"), str) else None,
         }
         for i, r in enumerate(resultado.to_dict("records"))
     ]
@@ -49,7 +52,7 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
         analise = Analise(chave=chave, origem=origem, nome_ficheiro=(nome_ficheiro or None) and nome_ficheiro[:255],
                           criada_em=datetime.now().replace(microsecond=0), total=len(linhas),
                           alertas=sum(l["nivel"] != "Normal" for l in linhas), modelo=modelo,
-                          utilizador_id=utilizador_id)
+                          utilizador_id=utilizador_id, chave_api_id=chave_api_id)
         sessao.add(analise)
         sessao.flush()
         if linhas:
@@ -97,3 +100,52 @@ def listar_analises(sessoes: sessionmaker, origem: str | None = None, limite: in
 def contar_analises(sessoes: sessionmaker) -> int:
     with sessoes() as sessao:
         return sessao.scalar(select(func.count(Analise.id))) or 0
+
+
+# ------------------------------------------------------------ transações recebidas pela API
+def historico_api(sessoes: sessionmaker, clientes: set[str], desde: datetime) -> pd.DataFrame:
+    """As transações destes clientes recebidas pela API desde `desde`, no formato do histórico do treino.
+
+    A coluna fraude vem das decisões dos analistas: uma fraude confirmada não entra no "habitual" do cliente.
+    """
+    from .banco import Alerta
+    colunas = ("id_transacao", "cliente", "data_hora", "valor", "cidade", "pais", "categoria")
+    consulta = (select(*(getattr(TransacaoAvaliada, c) for c in colunas), Alerta.estado)
+                .join(Analise, Analise.id == TransacaoAvaliada.analise_id)
+                .outerjoin(Alerta, Alerta.transacao_id == TransacaoAvaliada.id)
+                .where(Analise.origem == "api", TransacaoAvaliada.cliente.in_(sorted(clientes)),
+                       TransacaoAvaliada.data_hora >= desde)
+                .order_by(TransacaoAvaliada.data_hora, TransacaoAvaliada.id))
+    with sessoes() as sessao:
+        linhas = sessao.execute(consulta).all()
+    df = pd.DataFrame([dict(zip(colunas, l[:-1])) | {"fraude": int(l[-1] == "fraude")} for l in linhas],
+                      columns=[*colunas, "fraude"])
+    df["data_hora"] = pd.to_datetime(df["data_hora"])
+    return df
+
+
+def resultados_api(sessoes: sessionmaker, ids: list[str]) -> dict[str, dict]:
+    """O resultado já gravado de cada id_transacao recebido antes pela API (para não avaliar duas vezes)."""
+    from .banco import Alerta
+    if not ids:
+        return {}
+    consulta = (select(TransacaoAvaliada, Alerta.id, Alerta.estado)
+                .join(Analise, Analise.id == TransacaoAvaliada.analise_id)
+                .outerjoin(Alerta, Alerta.transacao_id == TransacaoAvaliada.id)
+                .where(Analise.origem == "api", TransacaoAvaliada.id_transacao.in_(sorted(set(ids))))
+                .order_by(TransacaoAvaliada.id))
+    resultado = {}
+    with sessoes() as sessao:
+        for t, alerta_id, estado in sessao.execute(consulta):
+            resultado.setdefault(t.id_transacao, {
+                "id_transacao": t.id_transacao, "cliente": t.cliente, "data_hora": t.data_hora, "valor": t.valor,
+                "risco": t.risco, "anomalia": t.anomalia, "nivel": t.nivel, "motivos": json.loads(t.motivos),
+                "alerta_id": alerta_id, "estado_alerta": estado})
+    return resultado
+
+
+def ultima_data_api(sessoes: sessionmaker) -> datetime | None:
+    """A data_hora mais recente recebida pela API (o simulador continua a partir daqui)."""
+    with sessoes() as sessao:
+        return sessao.scalar(select(func.max(TransacaoAvaliada.data_hora))
+                             .join(Analise, Analise.id == TransacaoAvaliada.analise_id).where(Analise.origem == "api"))

@@ -108,4 +108,7 @@ def carregar(pasta: Path, chave: str | None = None) -> Artefatos | None:
         return None
     if not isinstance(detector, Detector) or not isinstance(historico, pd.DataFrame):
         return None
+    for modelo in detector.classificadores.values():  # no servidor, avaliar poucas linhas com várias threads
+        if "modelo__n_jobs" in modelo.get_params():    # do Random Forest custava mais do que poupava
+            modelo.set_params(modelo__n_jobs=1)
     return Artefatos(detector, historico, teste, resultados, pasta)

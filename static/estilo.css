@@ -160,3 +160,14 @@ textarea { font: inherit; font-weight: 400; color: inherit; background: var(--su
 .eixo-x { grid-column: 2; display: flex; justify-content: space-between; font-size: .75rem; color: var(--tinta-suave); }
 .tabela-dados { margin: .5rem 0 0; }
 .tabela-dados summary { cursor: pointer; color: var(--acao); font-weight: 600; }
+
+/* API */
+.operacao { border-top: 1px solid var(--linha); padding: .5rem 0; }
+.operacao h3 { margin: .4rem 0; }
+.metodo { display: inline-block; min-width: 3.5rem; text-align: center; font-size: .8rem; font-weight: 700; padding: .1rem .4rem;
+  border-radius: 2px; color: #fff; background: var(--tinta-suave); }
+.metodo-post { background: var(--acao); }
+.metodo-get { background: var(--normal); }
+pre.codigo { background: var(--tinta); color: #eef2f5; padding: 1rem; border-radius: 3px; overflow-x: auto; font-size: .85rem; }
+code.chave { display: inline-block; font-size: 1rem; padding: .3rem .5rem; word-break: break-all; user-select: all; }
+.chave-nova { border-left: 6px solid var(--normal); }

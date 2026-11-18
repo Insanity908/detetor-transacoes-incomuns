@@ -1,6 +1,8 @@
 """Avalia transações novas com o histórico guardado: features, modelos e motivos."""
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 import pandas as pd
 
@@ -9,12 +11,38 @@ from .explicacao import motivos
 from .perfis import calcular_features, normalizar, perfil_cliente
 
 
-def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame) -> pd.DataFrame:
-    """Recebe transações já validadas e devolve-as, pela mesma ordem, com risco, nível e motivos."""
-    historico = artefatos.historico
+_cache = {"historico": None, "por_cliente": {}}
+_trinco = threading.Lock()
+
+
+def _historico_por_cliente(historico: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """O histórico do treino já normalizado e separado por cliente, calculado uma vez por conjunto de modelos.
+
+    Normalizar as ~70 mil linhas a cada pedido custava dezenas de milissegundos por transação na API.
+    """
+    with _trinco:
+        if _cache["historico"] is not historico:
+            _cache["por_cliente"] = {c: g for c, g in normalizar(historico).groupby("cliente", sort=False)}
+            _cache["historico"] = historico
+        return _cache["por_cliente"]
+
+
+def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame,
+                       historico_extra: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Recebe transações já validadas e devolve-as, pela mesma ordem, com risco, nível e motivos.
+
+    historico_extra junta ao histórico do treino as transações recebidas antes (pela API), para que uma rajada
+    repartida por vários pedidos, ou os hábitos recentes do cliente, também contem.
+    """
     enviadas = normalizar(transacoes)
-    historico = normalizar(historico)
-    historico = historico[historico["cliente"].isin(set(enviadas["cliente"]))]  # só o passado de quem foi enviado
+    clientes = set(enviadas["cliente"])
+    por_cliente = _historico_por_cliente(artefatos.historico)
+    partes = [por_cliente[c] for c in sorted(clientes) if c in por_cliente]  # só o passado de quem foi enviado
+    if historico_extra is not None and len(historico_extra):
+        extra = normalizar(historico_extra)
+        partes.append(extra[extra["cliente"].isin(clientes)])
+    historico = (pd.concat(partes, ignore_index=True) if partes
+                 else normalizar(artefatos.historico.iloc[:0]))
     if "id_transacao" in historico.columns:  # a mesma transação já guardada não pode ser o próprio passado
         chave = lambda d: list(zip(d["id_transacao"].astype(str), d["cliente"], d["data_hora"]))
         repetidas = set(chave(enviadas))

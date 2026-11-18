@@ -97,6 +97,8 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
     @app.before_request
     def _identificar():
         g.utilizador = None
+        if request.path.startswith("/api/v1/"):  # a API autentica-se por chave (detector/api.py), nunca pela sessão
+            return None
         uid = session.get("uid")
         if uid is not None:
             u = contas.obter(sessoes, uid)
@@ -115,7 +117,7 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
 
     @app.before_request
     def _verificar_csrf():
-        if request.method not in METODOS_PROTEGIDOS:
+        if request.method not in METODOS_PROTEGIDOS or request.path.startswith("/api/v1/"):  # sem cookies: sem CSRF
             return None
         enviado = request.form.get(CAMPO_CSRF) or request.headers.get("X-CSRF-Token") or ""
         esperado = session.get(CAMPO_CSRF, "")
