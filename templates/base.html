@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block titulo %}Detetor de transações incomuns{% endblock %}</title>
+  <title>{% block titulo %}Detetor de Fraudes Financeiras{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
 </head>
 <body>
   <header>
     <div class="moldura">
-      <p class="marca">Detetor de transações incomuns <span>INAR</span></p>
+      <p class="marca">Detetor de Fraudes Financeiras <span>INAR</span></p>
       <nav aria-label="Páginas">
         <a href="/" {% if aba in ('testar', 'testar_post') %}aria-current="page"{% endif %}>Testar transação</a>
         <a href="/analisar" {% if aba and aba.startswith('analisar') %}aria-current="page"{% endif %}>Analisar ficheiro</a>

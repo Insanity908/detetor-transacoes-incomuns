@@ -1,0 +1,84 @@
+"""Configuração lida das variáveis de ambiente e do ficheiro `.env` na raiz do projeto.
+
+As variáveis já definidas no ambiente têm prioridade sobre o `.env` (útil nos testes).
+"""
+from __future__ import annotations
+
+import os
+import secrets
+from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+RAIZ = Path(__file__).resolve().parent.parent
+AMBIENTES = ("desenvolvimento", "teste", "producao")
+NIVEIS_LOG = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+
+@dataclass(frozen=True)
+class Configuracao:
+    ambiente: str
+    chave_secreta: str
+    url_banco: str
+    pasta_modelos: Path
+    pasta_logs: Path
+    nivel_log: str
+    host: str
+    porta: int
+    threads: int
+
+    @property
+    def producao(self) -> bool:
+        return self.ambiente == "producao"
+
+
+def _caminho(valor: str) -> Path:
+    caminho = Path(valor)
+    return caminho if caminho.is_absolute() else RAIZ / caminho
+
+
+def _inteiro(nome: str, padrao: int, minimo: int, maximo: int) -> int:
+    texto = os.environ.get(nome, str(padrao)).strip()
+    try:
+        valor = int(texto)
+    except ValueError:
+        raise ValueError(f"{nome} tem de ser um número inteiro (recebido: '{texto}')") from None
+    if not minimo <= valor <= maximo:
+        raise ValueError(f"{nome} tem de estar entre {minimo} e {maximo} (recebido: {valor})")
+    return valor
+
+
+def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
+    if ficheiro_env is not None and Path(ficheiro_env).exists():
+        load_dotenv(ficheiro_env, override=False, encoding="utf-8")
+
+    ambiente = os.environ.get("AMBIENTE", "desenvolvimento").strip().lower()
+    if ambiente not in AMBIENTES:
+        raise ValueError(f"AMBIENTE tem de ser um de: {', '.join(AMBIENTES)} (recebido: '{ambiente}')")
+
+    chave = os.environ.get("CHAVE_SECRETA", "").strip()
+    if not chave:
+        if ambiente == "producao":
+            raise ValueError("Defina CHAVE_SECRETA no .env antes de iniciar em produção (o instalar.bat cria uma)")
+        chave = secrets.token_hex(32)  # temporária: muda a cada arranque, aceitável fora de produção
+
+    nivel = os.environ.get("NIVEL_LOG", "INFO").strip().upper()
+    if nivel not in NIVEIS_LOG:
+        raise ValueError(f"NIVEL_LOG tem de ser um de: {', '.join(NIVEIS_LOG)} (recebido: '{nivel}')")
+
+    url = os.environ.get("URL_BANCO", "").strip()
+    if not url:
+        url = "sqlite:///" + (RAIZ / "instancia" / "detetor.db").as_posix()
+
+    return Configuracao(
+        ambiente=ambiente,
+        chave_secreta=chave,
+        url_banco=url,
+        pasta_modelos=_caminho(os.environ.get("PASTA_MODELOS", "modelos")),
+        pasta_logs=_caminho(os.environ.get("PASTA_LOGS", "logs")),
+        nivel_log=nivel,
+        host=os.environ.get("HOST", "127.0.0.1").strip(),
+        porta=_inteiro("PORTA", 5000, 1, 65535),
+        threads=_inteiro("THREADS", 4, 1, 64),
+    )

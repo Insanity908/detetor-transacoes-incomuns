@@ -10,6 +10,16 @@ from detector.modelos import treinar
 from detector.perfis import calcular_features
 
 
+@pytest.fixture(autouse=True)
+def ambiente_de_teste(tmp_path, monkeypatch):
+    """Cada teste usa a sua base de dados e pasta de logs temporárias, nunca as da instalação."""
+    monkeypatch.setenv("AMBIENTE", "teste")
+    monkeypatch.setenv("URL_BANCO", "sqlite:///" + (tmp_path / "teste.db").as_posix())
+    monkeypatch.setenv("PASTA_LOGS", str(tmp_path / "logs"))
+    monkeypatch.setenv("NIVEL_LOG", "WARNING")
+    return tmp_path
+
+
 @pytest.fixture(scope="session")
 def artefatos_pequenos():
     """Modelos treinados com 80 clientes, sem resultados nem gráficos: rápido para testar o serviço e a interface."""

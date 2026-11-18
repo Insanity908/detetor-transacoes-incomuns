@@ -12,8 +12,24 @@
 </form>
 {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
+{% if recentes and not chave %}
+<h2>Análises recentes</h2>
+<div class="rolagem"><table class="recentes">
+  <thead><tr><th>Data</th><th>Ficheiro</th><th class="num">Transações</th><th class="num">Com alerta</th><th></th></tr></thead>
+  <tbody>
+  {% for a in recentes %}
+    <tr><td>{{ a.criada_em.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ a.nome_ficheiro or '—' }}</td>
+      <td class="num">{{ a.total }}</td><td class="num">{{ a.alertas }}</td>
+      <td><a href="/analisar/{{ a.chave }}">Abrir</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+
 {% if chave %}
 <div class="resumo">
+  {% if analise.nome_ficheiro %}<p class="ajuda">Ficheiro <strong>{{ analise.nome_ficheiro }}</strong>,
+    analisado em {{ analise.criada_em.strftime('%d/%m/%Y às %H:%M') }}.</p>{% endif %}
   <p><strong>{{ total }}</strong> transações analisadas, <strong>{{ alertas }}</strong> com alerta (alto risco ou atenção).</p>
   <p class="acoes">
     {% if so_alertas %}<a href="/analisar/{{ chave }}">Mostrar todas</a>{% else %}<a href="/analisar/{{ chave }}?alertas=1">Mostrar só os alertas</a>{% endif %}
