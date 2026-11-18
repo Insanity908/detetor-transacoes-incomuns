@@ -1,6 +1,7 @@
 """Fichas de clientes do banco de demonstração: validação, criação (com conta), pesquisa e edição."""
 from __future__ import annotations
 
+import random
 import re
 import unicodedata
 from collections.abc import Mapping
@@ -173,3 +174,51 @@ def editar(sessoes, cliente_id: int, telefone: str, email: str, morada: str, cid
                 setattr(cliente, nome, novo)
         s.commit()
         return mudancas
+
+
+NOMES = ("Ana", "Maria", "Joana", "Luísa", "Celeste", "Fátima", "Graça", "Teresa", "Isabel", "Amélia",
+         "João", "António", "Carlos", "Manuel", "Alberto", "Armando", "Filipe", "Gilberto", "Samuel", "Eduardo")
+APELIDOS = ("Sitoe", "Macamo", "Chissano", "Mondlane", "Machava", "Tembe", "Cossa", "Muianga", "Nhantumbo",
+            "Mabunda", "Langa", "Matsinhe", "Bila", "Chongo", "Manjate", "Mucavele", "Zandamela", "Nhaca")
+RUAS = ("Av. 24 de Julho", "Av. Eduardo Mondlane", "Rua da Resistência", "Av. Samora Machel", "Rua do Bagamoyo")
+
+
+def criar_sinteticos(sessoes, perfis: list[dict], semente: int = 42) -> int:
+    """Cria a ficha, a conta e o saldo inicial dos clientes do gerador (mesmo código, ex. C0001).
+
+    Determinístico a partir da semente e idempotente: os códigos que já existem são saltados."""
+    from detector import contas_bancarias
+    rng = random.Random(semente)
+    documentos: set[tuple[str, str]] = set()
+    fichas = []
+    for perfil in perfis:  # gera todas as fichas, mesmo as já criadas, para a sequência não depender do que existe
+        nome = f"{rng.choice(NOMES)} {rng.choice(APELIDOS)} {rng.choice(APELIDOS)}"
+        nascimento = date(rng.randint(1960, 2000), rng.randint(1, 12), rng.randint(1, 28))
+        while True:
+            if rng.random() < 0.5:
+                tipo, numero = "NUIT", f"{rng.randint(0, 999_999_999):09d}"
+            else:
+                tipo, numero = "BI", f"{rng.randint(0, 999_999_999_999):012d}" + rng.choice("ABCDEFGHJKLMNPQ")
+            if (tipo, numero) not in documentos:
+                documentos.add((tipo, numero))
+                break
+        telefone = f"8{rng.randint(2, 7)}{rng.randint(0, 9_999_999):07d}"
+        morada = f"{rng.choice(RUAS)} {rng.randint(1, 999)}"
+        dados = validar(dict(nome=nome, data_nascimento=nascimento.isoformat(), tipo_documento=tipo,
+                             numero_documento=numero, telefone=telefone, email="", cidade=perfil["cidade"],
+                             morada=morada))
+        fichas.append((perfil, dados))
+    criados = 0
+    for perfil, dados in fichas:
+        codigo = perfil["cliente"]
+        if obter_por_codigo(sessoes, codigo) is not None:
+            continue
+        try:
+            cliente = criar(sessoes, dados, "sistema", sintetico=True, codigo=codigo)
+        except ValueError:  # documento igual ao de uma ficha real: salta
+            continue
+        saldo = round(perfil["tipico"] * perfil["taxa"] * 90 * 100)
+        if saldo > 0:
+            contas_bancarias.depositar(sessoes, cliente.conta.id, saldo, "balcao", "sistema", None, "Saldo inicial")
+        criados += 1
+    return criados

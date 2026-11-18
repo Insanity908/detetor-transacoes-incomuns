@@ -7,6 +7,7 @@ Execução, na raiz do projeto:
     python gerir.py verificar           mostra a configuração e se o banco e os modelos estão prontos
     python gerir.py criar-admin         cria uma conta de administrador (pede o nome e a senha)
     python gerir.py desbloquear NOME    reativa uma conta e limpa o bloqueio por tentativas falhadas
+    python gerir.py verificar-saldos    confere os saldos do banco com os movimentos (código 1 se houver diferenças)
     python gerir.py criar-chave NOME    cria uma chave da API (por exemplo, para o simulador) e mostra-a uma vez
 """
 from __future__ import annotations
@@ -62,6 +63,23 @@ def _sessoes():
     url = ler_configuracao().url_banco
     migrar(url)
     return criar_fabrica_sessoes(criar_motor(url))
+
+
+def criar_sinteticos(n: int = 300) -> None:
+    """Cria os clientes do banco que correspondem aos do treino (idempotente)."""
+    from detector import clientes, simulacao
+    criados = clientes.criar_sinteticos(_sessoes(), simulacao.clientes_do_treino(n))
+    print(f"Clientes de demonstração: {criados} criados." if criados else "Clientes de demonstração já existem.")
+
+
+def verificar_saldos() -> int:
+    from detector import contas_bancarias
+    linhas = contas_bancarias.verificar_saldos(_sessoes())
+    for linha in linhas:
+        print(linha)
+    if not linhas:
+        print("Saldos coerentes com os movimentos.")
+    return 1 if linhas else 0
 
 
 def criar_admin(nome_utilizador: str, nome: str, senha: str) -> None:
@@ -153,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     comandos.add_parser("criar-admin", help="cria uma conta de administrador")
     d = comandos.add_parser("desbloquear", help="reativa e desbloqueia uma conta")
     d.add_argument("nome_utilizador")
+    comandos.add_parser("verificar-saldos", help="confere os saldos do banco com os movimentos")
     k = comandos.add_parser("criar-chave", help="cria uma chave da API")
     k.add_argument("nome", help="quem a vai usar, por exemplo Simulador")
     k.add_argument("--limite", type=int, default=600, help="pedidos por minuto (600 por omissão)")
@@ -163,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Ficheiro .env criado." if criar_env() else "Ficheiro .env já existe: mantido.")
             banco()
             treinar()
+            criar_sinteticos()
             from detector import contas
             if contas.contar(_sessoes()) == 0:
                 try:
@@ -182,6 +202,8 @@ def main(argv: list[str] | None = None) -> int:
             criar_admin_interativo()
         elif args.comando == "desbloquear":
             return desbloquear(args.nome_utilizador)
+        elif args.comando == "verificar-saldos":
+            return verificar_saldos()
         elif args.comando == "criar-chave":
             criar_chave(args.nome, args.limite)
     except ValueError as exc:

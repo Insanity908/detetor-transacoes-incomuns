@@ -91,3 +91,38 @@ def test_deposito_em_conta_bloqueada_e_recusado(sessoes):
         contas_bancarias.depositar(sessoes, c.conta.id, 100, "balcao", "teste")
     with pytest.raises(ValueError, match="Canal"):
         contas_bancarias.depositar(sessoes, c.conta.id, 100, "xyz", "teste")
+
+
+def _perfis(n):
+    from detector import simulacao
+    return simulacao.clientes_do_treino(n)
+
+
+def test_sinteticos_sao_idempotentes(sessoes):
+    perfis = _perfis(5)
+    assert clientes.criar_sinteticos(sessoes, perfis) == 5
+    assert clientes.criar_sinteticos(sessoes, perfis) == 0
+    assert [c.codigo for c in clientes.pesquisar(sessoes, "")] == [f"C000{i}" for i in range(1, 6)]
+    primeiro = clientes.obter_por_codigo(sessoes, "C0001")
+    assert primeiro.sintetico and primeiro.conta.saldo > 0
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_sinteticos_passam_a_validacao_e_tem_documentos_unicos(sessoes):
+    assert clientes.criar_sinteticos(sessoes, _perfis(300)) == 300
+    todos = clientes.pesquisar(sessoes, "", limite=1000)
+    assert len({(c.tipo_documento, c.numero_documento) for c in todos}) == 300
+    for c in todos:
+        clientes.validar(dict(nome=c.nome, data_nascimento=c.data_nascimento.isoformat(),
+                              tipo_documento=c.tipo_documento, numero_documento=c.numero_documento,
+                              telefone=c.telefone, email=c.email or "", cidade=c.cidade, morada=c.morada))
+
+
+def test_cliente_novo_continua_a_numeracao(sessoes):
+    clientes.criar_sinteticos(sessoes, _perfis(5))
+    assert _novo(sessoes).codigo == "C0006"
+
+
+def test_verificar_saldos_pelo_gerir(pasta_pequena, capsys):
+    import gerir
+    assert gerir.main(["verificar-saldos"]) == 0
