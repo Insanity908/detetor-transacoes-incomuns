@@ -6,9 +6,10 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from detector.banco import CANAIS_MOVIMENTO, ContaBancaria, Movimento
+from detector.banco import CANAIS_MOVIMENTO, ContaBancaria, Movimento, TIPOS_MOVIMENTO
 
 TIPOS_ENTRADA = ("deposito", "transferencia_recebida")
+ESTADOS_DEBITO = ("autorizado", "retido", "recusado")
 
 
 def _agora() -> datetime:
@@ -38,6 +39,100 @@ def creditar(s: Session, conta_id: int, valor: int, tipo: str, canal: str, por: 
     s.add(movimento)
     s.flush()
     return movimento
+
+
+def _saldo(s: Session, conta_id: int) -> int:
+    return s.execute(select(ContaBancaria.saldo).where(ContaBancaria.id == conta_id)
+                     .execution_options(populate_existing=True)).scalar_one()
+
+
+def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str, por: str, momento: datetime,
+            estado: str, motivo: str | None = None, contraparte_id: int | None = None,
+            transacao_id: int | None = None, id_transacao: str | None = None,
+            descricao: str | None = None) -> Movimento:
+    """Regista uma saída: autorizada (debita), retida (reserva) ou recusada (só grava). Sem commit.
+
+    O controlo do saldo é um UPDATE condicional, por isso dois pedidos em simultâneo não gastam o mesmo dinheiro.
+    """
+    if valor <= 0:
+        raise ValueError("O valor tem de ser maior que zero.")
+    if tipo not in TIPOS_MOVIMENTO or tipo in TIPOS_ENTRADA:
+        raise ValueError(f"Tipo de saída inválido: {tipo}.")
+    if canal not in CANAIS_MOVIMENTO:
+        raise ValueError(f"Canal inválido: {canal}.")
+    if estado not in ESTADOS_DEBITO:
+        raise ValueError(f"Estado inválido para um débito: {estado}.")
+    if tipo == "transferencia_enviada" and contraparte_id is None:
+        raise ValueError("A transferência precisa de uma conta de destino.")
+    destino = s.get(ContaBancaria, contraparte_id) if contraparte_id is not None else None
+    if contraparte_id is not None and destino is None:
+        raise ValueError("Conta de destino não encontrada.")
+
+    saldo_apos = None
+    if estado != "recusado":
+        if conta.estado == "bloqueada":
+            estado, motivo = "recusado", "A conta está bloqueada."
+        elif tipo == "transferencia_enviada" and destino.estado == "bloqueada":
+            estado, motivo = "recusado", "A conta de destino está bloqueada."
+    if estado != "recusado":
+        if estado == "autorizado":
+            valores = {"saldo": ContaBancaria.saldo - valor}
+        else:
+            valores = {"saldo_retido": ContaBancaria.saldo_retido + valor}
+        feito = s.execute(update(ContaBancaria).where(ContaBancaria.id == conta.id,
+                                                      ContaBancaria.saldo - ContaBancaria.saldo_retido >= valor)
+                          .values(**valores)).rowcount
+        if not feito:
+            estado, motivo = "recusado", "Saldo insuficiente."
+        elif estado == "autorizado":
+            saldo_apos = _saldo(s, conta.id)
+    agora = _agora()
+    movimento = Movimento(conta_id=conta.id, tipo=tipo, valor=valor, estado=estado, motivo=motivo,
+                          contraparte_id=contraparte_id, canal=canal, momento=momento, registado_em=agora,
+                          transacao_id=transacao_id, id_transacao=id_transacao, descricao=descricao,
+                          saldo_apos=saldo_apos, criado_por=por)
+    s.add(movimento)
+    s.flush()
+    if estado == "autorizado" and tipo == "transferencia_enviada":
+        creditar(s, contraparte_id, valor, "transferencia_recebida", canal, por, momento, descricao, conta.id)
+    return movimento
+
+
+def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimento:
+    """Resolve um movimento retido: executa-o (debita e credita o destino) ou cancela-o. Sem commit."""
+    # Reclama o movimento de forma atómica: só uma liquidação consegue passar de "retido" a outro estado.
+    reclamado = s.execute(update(Movimento).where(Movimento.id == movimento_id, Movimento.estado == "retido")
+                          .values(estado="cancelado")).rowcount
+    if not reclamado:
+        if s.get(Movimento, movimento_id) is None:
+            raise ValueError("Movimento não encontrado.")
+        raise ValueError("O movimento não está retido.")
+    movimento = s.execute(select(Movimento).where(Movimento.id == movimento_id)
+                          .execution_options(populate_existing=True)).scalar_one()
+    valor = movimento.valor
+    s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)
+              .values(saldo_retido=ContaBancaria.saldo_retido - valor))
+    if not executar:
+        movimento.motivo = "Fraude confirmada."
+    else:
+        destino = s.get(ContaBancaria, movimento.contraparte_id) if movimento.contraparte_id else None
+        if movimento.tipo == "transferencia_enviada" and (destino is None or destino.estado == "bloqueada"):
+            movimento.motivo = "A conta de destino foi bloqueada entretanto."
+        else:
+            s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)
+                      .values(saldo=ContaBancaria.saldo - valor))
+            movimento.estado = "autorizado"
+            movimento.saldo_apos = _saldo(s, movimento.conta_id)
+            if movimento.tipo == "transferencia_enviada":
+                creditar(s, movimento.contraparte_id, valor, "transferencia_recebida", movimento.canal, por,
+                         movimento.momento, movimento.descricao, movimento.conta_id)
+    s.flush()
+    return movimento
+
+
+def movimento_da_transacao(s: Session, transacao_id: int) -> Movimento | None:
+    """O movimento ligado a uma transação avaliada, se existir."""
+    return s.scalar(select(Movimento).where(Movimento.transacao_id == transacao_id).order_by(Movimento.id).limit(1))
 
 
 def depositar(sessoes, conta_id: int, valor: int, canal: str, por: str, momento: datetime | None = None,

@@ -151,3 +151,116 @@ def test_sinteticos_sorteiam_outro_documento_se_repetido(sessoes, monkeypatch):
     assert clientes.criar_sinteticos(sessoes, [perfil]) == 1
     novo = clientes.obter_por_codigo(sessoes, "C0050")
     assert novo.numero_documento == "222222222" and novo.conta.saldo > 0
+
+
+# --- Tarefa 8: débito, reserva e liquidação ---------------------------------------------------------------
+
+def _conta_com(sessoes, saldo, **extra):
+    c = _novo(sessoes, **extra)
+    if saldo:
+        contas_bancarias.depositar(sessoes, c.conta.id, saldo, "balcao", "teste")
+    return c.conta.id
+
+
+def _debitar(sessoes, conta_id, valor, estado="autorizado", tipo="levantamento", **extra):
+    from datetime import datetime
+    from detector.banco import ContaBancaria
+    with sessoes.begin() as s:
+        m = contas_bancarias.debitar(s, s.get(ContaBancaria, conta_id), tipo, valor, "balcao", "teste",
+                                     datetime(2026, 1, 1, 10, 0), estado, **extra)
+        s.expunge(m)
+        return m
+
+
+def _conta(sessoes, conta_id):
+    from detector.banco import ContaBancaria
+    with sessoes() as s:
+        c = s.get(ContaBancaria, conta_id)
+        return c.saldo, c.saldo_retido
+
+
+def test_debito_autorizado_e_segundo_recusado_por_saldo(sessoes):
+    cid = _conta_com(sessoes, 10000)
+    m = _debitar(sessoes, cid, 6000)
+    assert m.estado == "autorizado" and m.saldo_apos == 4000
+    assert _conta(sessoes, cid) == (4000, 0)
+    m2 = _debitar(sessoes, cid, 6000)
+    assert m2.estado == "recusado" and m2.motivo == "Saldo insuficiente."
+    assert _conta(sessoes, cid) == (4000, 0)
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_reserva_reduz_o_disponivel(sessoes):
+    cid = _conta_com(sessoes, 10000)
+    assert _debitar(sessoes, cid, 3000, "retido").estado == "retido"
+    assert _conta(sessoes, cid) == (10000, 3000)
+    assert _debitar(sessoes, cid, 8000).estado == "recusado"
+    assert _debitar(sessoes, cid, 7000, "retido").estado == "retido"
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_liquidar_executando_e_nao_executando(sessoes):
+    cid = _conta_com(sessoes, 10000)
+    m = _debitar(sessoes, cid, 3000, "retido")
+    with sessoes.begin() as s:
+        r = contas_bancarias.liquidar(s, m.id, True, "analista")
+        assert r.estado == "autorizado" and r.saldo_apos == 7000
+    assert _conta(sessoes, cid) == (7000, 0)
+    m = _debitar(sessoes, cid, 2000, "retido")
+    with sessoes.begin() as s:
+        r = contas_bancarias.liquidar(s, m.id, False, "analista")
+        assert r.estado == "cancelado" and r.motivo == "Fraude confirmada."
+    assert _conta(sessoes, cid) == (7000, 0)
+    with pytest.raises(ValueError):
+        with sessoes.begin() as s:
+            contas_bancarias.liquidar(s, m.id, True, "analista")
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_transferencia_autorizada_credita_destino(sessoes):
+    a = _conta_com(sessoes, 10000)
+    b = _conta_com(sessoes, 0, numero_documento="987654321")
+    _debitar(sessoes, a, 4000, tipo="transferencia_enviada", contraparte_id=b)
+    assert _conta(sessoes, a) == (6000, 0) and _conta(sessoes, b) == (4000, 0)
+    recebido = contas_bancarias.extrato(sessoes, b)[0]
+    assert recebido.tipo == "transferencia_recebida" and recebido.contraparte_id == a
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_transferencia_retida_so_credita_ao_liquidar(sessoes):
+    a = _conta_com(sessoes, 10000)
+    b = _conta_com(sessoes, 0, numero_documento="987654321")
+    m = _debitar(sessoes, a, 4000, "retido", tipo="transferencia_enviada", contraparte_id=b)
+    assert _conta(sessoes, b) == (0, 0)
+    with sessoes.begin() as s:
+        contas_bancarias.liquidar(s, m.id, True, "analista")
+    assert _conta(sessoes, a) == (6000, 0) and _conta(sessoes, b) == (4000, 0)
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_liquidar_com_destino_bloqueado_cancela_sem_debitar(sessoes):
+    a = _conta_com(sessoes, 10000)
+    b = _conta_com(sessoes, 0, numero_documento="987654321")
+    m = _debitar(sessoes, a, 4000, "retido", tipo="transferencia_enviada", contraparte_id=b)
+    contas_bancarias.bloquear(sessoes, b, True, "teste")
+    with sessoes.begin() as s:
+        r = contas_bancarias.liquidar(s, m.id, True, "analista")
+        assert r.estado == "cancelado" and r.motivo == "A conta de destino foi bloqueada entretanto."
+    assert _conta(sessoes, a) == (10000, 0) and _conta(sessoes, b) == (0, 0)
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_recusado_nao_mexe_no_saldo_e_validacoes(sessoes):
+    cid = _conta_com(sessoes, 1000)
+    m = _debitar(sessoes, cid, 500, "recusado", motivo="Risco alto.")
+    assert m.estado == "recusado" and m.motivo == "Risco alto."
+    assert _conta(sessoes, cid) == (1000, 0)
+    for args in (dict(valor=0), dict(tipo="xyz"), dict(estado="cancelado")):
+        with pytest.raises(ValueError):
+            _debitar(sessoes, cid, **{"valor": 100, **args})
+
+
+def test_movimento_da_transacao(sessoes):
+    cid = _conta_com(sessoes, 1000)
+    with sessoes.begin() as s:
+        assert contas_bancarias.movimento_da_transacao(s, 999) is None
