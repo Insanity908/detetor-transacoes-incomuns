@@ -5,10 +5,11 @@ basta mudar URL_BANCO no .env para usar PostgreSQL no futuro.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
-from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, event, text)
+from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, String, Text,
+                        UniqueConstraint, create_engine, event, text)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -169,7 +170,7 @@ def verificar_ligacao(motor: Engine) -> bool:
         return False
 
 
-ESTADOS_ALERTA = ("novo", "em_analise", "fraude", "falso_alarme")
+ESTADOS_ALERTA = ("novo", "em_analise", "fraude", "falso_alarme", "recusado_auto")
 ESTADOS_ABERTOS = ("novo", "em_analise")
 
 
@@ -273,3 +274,86 @@ class Ajuste(Base):
     valor: Mapped[str] = mapped_column(Text)
     alterado_em: Mapped[datetime] = mapped_column(DateTime)
     alterado_por: Mapped[str] = mapped_column(String(50))
+
+
+TIPOS_MOVIMENTO = ("deposito", "levantamento", "compra", "transferencia_enviada", "transferencia_recebida")
+ESTADOS_MOVIMENTO = ("autorizado", "recusado", "retido", "cancelado")
+CANAIS_MOVIMENTO = ("balcao", "cliente", "api", "simulador")
+
+
+class Cliente(Base):
+    """Cliente do banco de demonstração. Não confundir com as contas da equipa (Utilizador)."""
+    __tablename__ = "clientes"
+    __table_args__ = (UniqueConstraint("tipo_documento", "numero_documento", name="uq_clientes_documento"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    codigo: Mapped[str] = mapped_column(String(10), unique=True)  # C0001
+    nome: Mapped[str] = mapped_column(String(120))
+    data_nascimento: Mapped[date] = mapped_column(Date)
+    tipo_documento: Mapped[str] = mapped_column(String(4))  # BI | NUIT
+    numero_documento: Mapped[str] = mapped_column(String(20))
+    telefone: Mapped[str] = mapped_column(String(20))
+    email: Mapped[str | None] = mapped_column(String(120))
+    cidade: Mapped[str] = mapped_column(String(100))
+    morada: Mapped[str] = mapped_column(String(255))
+    sintetico: Mapped[bool] = mapped_column(Boolean, default=False)  # criado pelo gerador de dados de teste
+    criado_em: Mapped[datetime] = mapped_column(DateTime)
+    criado_por: Mapped[str] = mapped_column(String(50))
+
+    conta: Mapped[ContaBancaria | None] = relationship(back_populates="cliente", uselist=False)
+
+
+class ContaBancaria(Base):
+    """Conta de um cliente. Os valores são cêntimos inteiros; o retido espera a decisão da equipa."""
+    __tablename__ = "contas_bancarias"
+    __table_args__ = (CheckConstraint("saldo_retido >= 0", name="ck_contas_saldo_retido"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    numero: Mapped[str] = mapped_column(String(20), unique=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), unique=True)
+    saldo: Mapped[int] = mapped_column(Integer, default=0)
+    saldo_retido: Mapped[int] = mapped_column(Integer, default=0)
+    estado: Mapped[str] = mapped_column(String(10), default="ativa")  # ativa | bloqueada
+    aberta_em: Mapped[datetime] = mapped_column(DateTime)
+
+    cliente: Mapped[Cliente] = relationship(back_populates="conta")
+
+    @property
+    def disponivel(self) -> int:
+        return self.saldo - self.saldo_retido
+
+
+class Movimento(Base):
+    """Uma operação pedida a uma conta e o que foi decidido (autorizada, recusada, retida ou cancelada)."""
+    __tablename__ = "movimentos"
+    __table_args__ = (CheckConstraint("valor > 0", name="ck_movimentos_valor"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conta_id: Mapped[int] = mapped_column(ForeignKey("contas_bancarias.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(30))
+    valor: Mapped[int] = mapped_column(Integer)  # cêntimos, sempre positivo
+    estado: Mapped[str] = mapped_column(String(12))
+    motivo: Mapped[str | None] = mapped_column(String(255))
+    contraparte_id: Mapped[int | None] = mapped_column(ForeignKey("contas_bancarias.id"))
+    canal: Mapped[str] = mapped_column(String(12))
+    momento: Mapped[datetime] = mapped_column(DateTime)  # tempo da transação
+    registado_em: Mapped[datetime] = mapped_column(DateTime)  # hora real do registo
+    transacao_id: Mapped[int | None] = mapped_column(ForeignKey("transacoes_avaliadas.id", ondelete="SET NULL"),
+                                                     index=True)
+    id_transacao: Mapped[str | None] = mapped_column(String(100), index=True)
+    descricao: Mapped[str | None] = mapped_column(String(140))
+    saldo_apos: Mapped[int | None] = mapped_column(Integer)
+    criado_por: Mapped[str] = mapped_column(String(50))
+
+
+class AcessoCliente(Base):
+    """Credenciais de um cliente na área do cliente (mesma lógica das contas da equipa)."""
+    __tablename__ = "acessos_cliente"
+
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), primary_key=True)
+    senha_hash: Mapped[str] = mapped_column(String(255))
+    trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)
+    tentativas_falhadas: Mapped[int] = mapped_column(Integer, default=0)
+    bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime)
+    versao_sessao: Mapped[int] = mapped_column(Integer, default=1)
+    ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime)
