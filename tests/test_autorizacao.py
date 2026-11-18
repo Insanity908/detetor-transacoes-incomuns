@@ -141,6 +141,7 @@ def test_ordem_por_momento_nao_pela_lista(sessoes, artefatos, monkeypatch):
     _forcar(monkeypatch, ("Normal", 5.0), ("Normal", 5.0))
     d1, d2 = autorizar(sessoes, artefatos, [_pedido(c, 6000, minutos=5), _pedido(c, 6000)], Cortes(), "banco")
     assert (d1.estado, d2.estado) == ("recusado", "autorizado")
+    assert contas_bancarias.verificar_saldos(sessoes) == []
 
 
 def test_transferencia_credita_o_destino(sessoes, artefatos, monkeypatch):
@@ -189,3 +190,29 @@ def test_historico_inclui_a_origem_banco(sessoes, artefatos, monkeypatch):
     autorizar(sessoes, artefatos, [_pedido(c, 1000)], Cortes(), "banco")
     h = repositorio.historico_api(sessoes, {"C0001"}, AGORA - timedelta(days=1))
     assert len(h) == 1
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+@pytest.mark.parametrize("alteracao", [dict(valor=0), dict(valor=-5), dict(canal="x"), dict(tipo="deposito")])
+def test_pedido_invalido_no_lote_nao_estraga_os_validos(sessoes, artefatos, monkeypatch, alteracao):
+    c = _conta(sessoes, 1, 50000)
+    _forcar(monkeypatch, ("Normal", 5.0))
+    movimentos = _contar(sessoes, Movimento)
+    d_mau, d_bom = autorizar(sessoes, artefatos, [_pedido(c, **alteracao), _pedido(c, 1000, minutos=1)],
+                             Cortes(), "banco")
+    assert (d_mau.movimento_id, d_mau.estado, d_mau.motivo) == (0, "recusado", "Pedido inválido.")
+    assert d_bom.estado == "autorizado"
+    assert _contar(sessoes, Movimento) == movimentos + 1  # só o válido (o depósito inicial já contava)
+    assert _conta_db(sessoes, c) == (49000, 0)
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_corrida_no_saldo_deixa_o_alerta_recusado_auto(sessoes, artefatos, monkeypatch):
+    c = _conta(sessoes, 1, 1000)
+    _forcar(monkeypatch, ("Alto risco", 60.0))
+    monkeypatch.setattr(autorizacao, "_disponivel", lambda s, conta_id: 10**9)  # a pré-verificação deixa passar
+    [d] = autorizar(sessoes, artefatos, [_pedido(c, 5000)], Cortes(), "banco")
+    assert (d.estado, d.motivo) == ("recusado", "Saldo insuficiente.")
+    assert _alerta(sessoes, d.alerta_id).estado == "recusado_auto"
+    assert _conta_db(sessoes, c) == (1000, 0)
+    assert contas_bancarias.verificar_saldos(sessoes) == []

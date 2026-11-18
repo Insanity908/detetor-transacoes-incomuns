@@ -26,6 +26,7 @@ registo = logging.getLogger("detetor")
 DIAS_HISTORICO = 90
 TIPOS_SAIDA = ("compra", "transferencia_enviada", "levantamento")
 MOTIVO_SALDO = "Saldo insuficiente."
+MOTIVO_INVALIDO = "Pedido inválido."
 MOTIVO_RISCO = "Risco muito alto: recusado automaticamente."
 
 
@@ -60,7 +61,7 @@ class Decisao:
 def _invalido(s: Session, p: PedidoDebito) -> str | None:
     """O motivo da recusa antes do modelo, ou None se o pedido pode ser avaliado."""
     if p.tipo not in TIPOS_SAIDA or p.canal not in CANAIS_MOVIMENTO or p.valor <= 0:
-        return "Pedido inválido."
+        return MOTIVO_INVALIDO
     conta = s.get(ContaBancaria, p.conta_id)
     if conta is None:
         return "Conta não encontrada."
@@ -135,7 +136,8 @@ def autorizar(sessoes: sessionmaker, artefatos, pedidos: list[PedidoDebito], cor
     agora = datetime.now().replace(microsecond=0)
     with sessoes.begin() as s:
         for i, motivo in invalidos.items():
-            m = _recusar(s, pedidos[i], ids[i], motivo, agora)
+            # Um pedido malformado (valor, tipo ou canal) não se regista: violaria as restrições da tabela.
+            m = None if motivo == MOTIVO_INVALIDO else _recusar(s, pedidos[i], ids[i], motivo, agora)
             decisoes[i] = Decisao(m.id if m else 0, "recusado", motivo, None, None, None)
 
         # Saldo disponível corrente (lido na transação) para decidir quem passa; o débito atómico é a salvaguarda.

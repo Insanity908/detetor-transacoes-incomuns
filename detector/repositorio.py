@@ -121,7 +121,7 @@ def contar_analises(sessoes: sessionmaker) -> int:
 
 # ------------------------------------------------------------ transações recebidas pela API
 def historico_api(sessoes: sessionmaker, clientes: set[str], desde: datetime) -> pd.DataFrame:
-    """As transações destes clientes recebidas pela API desde `desde`, no formato do histórico do treino.
+    """As transações destes clientes recebidas pela API ou pelo banco desde `desde`, no formato do histórico do treino.
 
     A coluna fraude vem das decisões dos analistas: uma fraude confirmada não entra no "habitual" do cliente.
     """
