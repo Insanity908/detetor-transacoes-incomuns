@@ -229,7 +229,7 @@ def test_monitorizacao_so_conta_a_versao_publicada(app):
 # ------------------------------------------------------------ cenários do simulador
 def test_cenario_novo_tipo():
     sim = Simulador(clientes_do_treino(), datetime(2026, 5, 1), fraude_pct=5, semente=1, cenario="novo_tipo")
-    fraudes = [t for t in sim.avancar(datetime(2026, 5, 8)) if t["simulacao"]["fraude"]]
+    fraudes = [t for t in sim.avancar(datetime(2026, 5, 8))[0] if t["simulacao"]["fraude"]]
     novas = [t for t in fraudes if t["simulacao"]["tipo"] == TIPO_NOVO]
     assert 0.4 < len(novas) / len(fraudes) < 0.85
     clientes = {c["cliente"]: c for c in clientes_do_treino()}
@@ -239,11 +239,11 @@ def test_cenario_novo_tipo():
 
 
 def test_cenario_valores_e_habitos():
-    normal = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4).avancar(datetime(2026, 5, 6))
-    caro = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4, cenario="valores").avancar(datetime(2026, 5, 6))
+    normal = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4).avancar(datetime(2026, 5, 6))[0]
+    caro = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4, cenario="valores").avancar(datetime(2026, 5, 6))[0]
     mediana = lambda ts: np.median([t["valor"] for t in ts if not t["simulacao"]["fraude"]])
     assert 2.2 < mediana(caro) / mediana(normal) < 2.8
-    tarde = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4, cenario="habitos").avancar(datetime(2026, 5, 6))
+    tarde = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=4, cenario="habitos").avancar(datetime(2026, 5, 6))[0]
     hora = lambda ts: np.mean([datetime.fromisoformat(t["data_hora"]).hour < 6 for t in ts])
     assert hora(tarde) > 3 * hora(normal)  # muitas compras passam para a madrugada
 

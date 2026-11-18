@@ -67,7 +67,7 @@ def gerar_transacoes(n: int, inicio: datetime, fraude_pct: float = 2.0, semente:
     transacoes, fim = [], inicio
     while len(transacoes) < n:
         fim += timedelta(hours=6)
-        transacoes.extend(sim.avancar(fim))
+        transacoes.extend(sim.avancar(fim)[0])
     return transacoes[:n]
 
 

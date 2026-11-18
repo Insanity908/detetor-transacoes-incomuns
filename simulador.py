@@ -35,6 +35,10 @@ TENTATIVAS = 5
 class ErroFatal(RuntimeError):
     """Não adianta tentar de novo (chave inválida, dados recusados)."""
 
+    def __init__(self, mensagem: str, estado: int | None = None):
+        super().__init__(mensagem)
+        self.estado = estado
+
 
 class ClienteApi:
     """Fala com a API. `transporte(metodo, caminho, corpo) -> (estado, cabeçalhos, json)` pode ser trocado nos testes."""
@@ -69,7 +73,7 @@ class ClienteApi:
             if estado in (401, 403):
                 raise ErroFatal(f"Chave recusada: {resposta.get('mensagem', estado)}")
             if estado in (400, 415, 422):
-                raise ErroFatal(f"Pedido recusado ({estado}): {json.dumps(resposta, ensure_ascii=False)[:500]}")
+                raise ErroFatal(f"Pedido recusado ({estado}): {json.dumps(resposta, ensure_ascii=False)[:500]}", estado)
             if estado == 429:
                 esperar = float(cabecalhos.get("Retry-After", 1))
                 print(f"  limite de pedidos atingido; à espera {esperar:.0f} s", flush=True)
@@ -90,6 +94,7 @@ def resumo(est: Estatisticas, agora: datetime) -> str:
     linhas = [f"[{agora:%d/%m %H:%M} simulado] enviadas {est.enviadas} · fraudes {est.fraudes} "
               f"(apanhadas {est.fraudes_com_alerta}, {_pct(est.detecao)}) · "
               f"alertas em legítimas {est.legitimas_com_alerta} ({_pct(est.falsos_alertas)})"]
+    linhas.append(f"   recusadas por saldo {est.recusadas_saldo} · retidas {est.retidas}")
     tipos = [f"{NOMES_TIPO_SIMULACAO[t]} {a}/{n}" for t, (n, a) in est.por_tipo.items() if n]
     if tipos:
         linhas.append("   por tipo (apanhadas/enviadas): " + " · ".join(tipos))
@@ -103,13 +108,23 @@ def simular(api: ClienteApi, sim: Simulador, velocidade: float, duracao: float =
     est = Estatisticas()
     inicio_real, inicio_simulado = relogio(), sim.agora
     ultimo_resumo = inicio_real
+    avisou_sem_conta = False
     try:
         while True:
             decorrido = relogio() - inicio_real
             if duracao and decorrido >= duracao:
                 break
             agora = inicio_simulado + timedelta(seconds=decorrido * velocidade)
-            prontas = sim.avancar(agora)
+            prontas, depositos = sim.avancar(agora)
+            for i in range(0, len(depositos), MAX_LOTE):
+                try:
+                    api.pedir("POST", "/api/v1/depositos", {"depositos": depositos[i:i + MAX_LOTE]})
+                except ErroFatal as exc:
+                    if exc.estado != 422:
+                        raise
+                    if not avisou_sem_conta:  # a API não escreveu nada: seguem só as transações
+                        escrever("Os clientes do simulador não têm conta no banco: corra gerir.py preparar.")
+                        avisou_sem_conta = True
             for i in range(0, len(prontas), MAX_LOTE):
                 lote = prontas[i:i + MAX_LOTE]
                 resposta = api.pedir("POST", "/api/v1/transacoes", {"transacoes": lote})

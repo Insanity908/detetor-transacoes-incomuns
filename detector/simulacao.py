@@ -84,6 +84,8 @@ class Simulador:
         if self.cenario == "novo_tipo" and TIPO_NOVO not in self.tipos:  # metade das fraudes passa a ser do tipo novo
             self.tipos = (*self.tipos, *([TIPO_NOVO] * len(self.tipos)))
         self.rng = np.random.default_rng(self.semente)
+        # Gerador próprio para os salários: não altera a sequência das compras e fraudes para uma dada semente.
+        self.rng_salarios = np.random.default_rng(None if self.semente is None else [self.semente, 25])
         self.taxas = np.array([c["taxa"] for c in self.clientes])  # compras por dia
         atraso = ATRASO_HABITOS if self.cenario == "habitos" else 0
         self.horarias = np.array([np.roll(_distribuicao_horaria(c["pico"]), atraso) for c in self.clientes])
@@ -97,8 +99,12 @@ class Simulador:
         self.proporcoes = np.array(PESO_CATEGORIAS) / np.sum(PESO_CATEGORIAS)
 
     # ------------------------------------------------------------ avançar o tempo
-    def avancar(self, ate: datetime) -> list[dict]:
-        """Gera os eventos entre o instante atual e `ate` e devolve as transações que já devem ser enviadas."""
+    def avancar(self, ate: datetime) -> tuple[list[dict], list[dict]]:
+        """Gera os eventos entre o instante atual e `ate`.
+
+        Devolve `(transações, depósitos)`: as transações que já devem ser enviadas e os salários cujo instante
+        (dia 25, 08:00 simuladas) foi atravessado."""
+        depositos = self._salarios(self.agora, ate)
         while self.agora < ate:
             fim_da_hora = (self.agora.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
             passo_fim = min(ate, fim_da_hora)  # a taxa muda de hora para hora
@@ -116,7 +122,25 @@ class Simulador:
         prontas = []
         while self._fila and self._fila[0][0] <= ate:
             prontas.append(heapq.heappop(self._fila)[2])
-        return prontas
+        return prontas, depositos
+
+    def _salarios(self, de: datetime, ate: datetime) -> list[dict]:
+        """Um depósito de salário por cliente por cada dia 25, 08:00, em `(de, ate]`."""
+        depositos = []
+        ano, mes = de.year, de.month
+        while True:
+            instante = datetime(ano, mes, 25, 8)
+            if instante > ate:
+                break
+            if instante > de:
+                for c in self.clientes:
+                    valor = round(float(c["tipico"] * c["taxa"] * 30 * self.rng_salarios.uniform(1.1, 1.4)), 2)
+                    depositos.append({
+                        "id_deposito": f"{self.prefixo}-SAL-{instante:%Y%m}-{c['cliente']}",
+                        "cliente": c["cliente"], "valor": valor, "data_hora": instante.isoformat(),
+                        "descricao": "Salário"})
+            ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+        return depositos
 
     def pendentes(self) -> int:
         return len(self._fila)
@@ -201,6 +225,8 @@ class Estatisticas:
     fraudes_com_alerta: int = 0
     legitimas_com_alerta: int = 0
     duplicadas: int = 0
+    recusadas_saldo: int = 0  # débitos recusados por falta de saldo
+    retidas: int = 0  # movimentos retidos pelo detetor
     rejeitadas: int = 0
     por_tipo: dict = field(default_factory=lambda: {t: [0, 0] for t in TIPOS_SIMULACAO})  # [enviadas, com alerta]
 
@@ -209,6 +235,11 @@ class Estatisticas:
             self.duplicadas += 1
             return
         self.enviadas += 1
+        movimento = resultado.get("movimento") or {}
+        if movimento.get("estado") == "recusado" and movimento.get("motivo") == "Saldo insuficiente.":
+            self.recusadas_saldo += 1
+        elif movimento.get("estado") == "retido":
+            self.retidas += 1
         alerta = bool(resultado.get("alerta"))
         if enviada["simulacao"]["fraude"]:
             self.fraudes += 1

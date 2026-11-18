@@ -13,7 +13,7 @@ from app import criar_app
 from detector import alertas, auditoria, chaves_api
 from detector.api import MAX_LOTE, validar_pedido, ErroValidacao
 from detector.banco import Alerta, Analise, ChaveApi, Tarefa, TransacaoAvaliada
-from detector.simulacao import Simulador, clientes_do_treino
+from detector.simulacao import Estatisticas, Simulador, clientes_do_treino
 from tests.conftest import criar_cliente
 
 N_CLIENTES = 80  # como a fixture pasta_pequena
@@ -369,7 +369,7 @@ def test_simulador_usa_os_clientes_do_treino(artefatos_pequenos):
 
 def test_simulador_gera_o_ritmo_e_a_fraude_pedidos():
     sim = Simulador(clientes_do_treino(), datetime(2026, 5, 1), fraude_pct=5, semente=7)
-    transacoes = sim.avancar(datetime(2026, 5, 15))
+    transacoes = sim.avancar(datetime(2026, 5, 15))[0]
     fraudes = [t for t in transacoes if t["simulacao"]["fraude"]]
     assert 600 < len(transacoes) / 14 < 800  # ~685 compras por dia nos 300 clientes
     assert 3.5 < 100 * len(fraudes) / len(transacoes) < 6.5
@@ -385,7 +385,7 @@ def test_simulador_gera_o_ritmo_e_a_fraude_pedidos():
 def test_simulador_e_reprodutivel_com_semente():
     a = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=3, prefixo="X")
     b = Simulador(clientes_do_treino(), datetime(2026, 5, 1), semente=3, prefixo="X")
-    assert a.avancar(datetime(2026, 5, 2)) == b.avancar(datetime(2026, 5, 2))
+    assert a.avancar(datetime(2026, 5, 2))[0] == b.avancar(datetime(2026, 5, 2))[0]
 
 
 @pytest.mark.parametrize("args", [dict(fraude_pct=80), dict(tipos=("inventado",)), dict(tipos=())])
@@ -396,7 +396,7 @@ def test_simulador_recusa_parametros_invalidos(args):
 
 def test_so_os_tipos_pedidos():
     sim = Simulador(clientes_do_treino(), datetime(2026, 5, 1), fraude_pct=20, tipos=("valor_alto",), semente=1)
-    tipos = {t["simulacao"]["tipo"] for t in sim.avancar(datetime(2026, 5, 3)) if t["simulacao"]["fraude"]}
+    tipos = {t["simulacao"]["tipo"] for t in sim.avancar(datetime(2026, 5, 3))[0] if t["simulacao"]["fraude"]}
     assert tipos == {"valor_alto"}
 
 
@@ -709,3 +709,83 @@ def test_transacao_com_id_de_deposito_depois_do_deposito(app, chave, monkeypatch
     r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="#x")]})
     assert r.status_code == 422
     _saldos_certos(app)
+
+
+# ------------------------------------------------------------ simulador: salário e contadores
+def test_salario_no_dia_25_uma_vez_por_cliente_e_por_mes():
+    clientes = clientes_do_treino(N_CLIENTES)
+    sim = Simulador(clientes, datetime(2026, 5, 20), semente=3, prefixo="SIM-AB12CD")
+    _, antes = sim.avancar(datetime(2026, 5, 25, 7, 59))
+    assert antes == []
+    _, dep = sim.avancar(datetime(2026, 5, 25, 8, 30))
+    assert len(dep) == len(clientes)
+    por_cliente = {c["cliente"]: c for c in clientes}
+    for d in dep:
+        c = por_cliente[d["cliente"]]
+        assert d["id_deposito"] == f"SIM-AB12CD-SAL-202605-{c['cliente']}"
+        assert d["data_hora"] == "2026-05-25T08:00:00"
+        base = c["tipico"] * c["taxa"] * 30
+        assert round(base * 1.1, 2) - 0.01 <= d["valor"] <= round(base * 1.4, 2) + 0.01
+        assert d["valor"] == round(d["valor"], 2)
+    assert sim.avancar(datetime(2026, 6, 20))[1] == []  # nada até ao mês seguinte
+    ids_junho = [d["id_deposito"] for d in sim.avancar(datetime(2026, 6, 26))[1]]
+    assert len(ids_junho) == len(clientes) and all("-SAL-202606-" in i for i in ids_junho)
+
+
+def test_salario_no_primeiro_mes_so_se_o_inicio_for_antes_do_dia_25():
+    sim = Simulador(clientes_do_treino(N_CLIENTES), datetime(2026, 5, 26), semente=3)
+    assert sim.avancar(datetime(2026, 6, 24))[1] == []
+
+
+def _api_falsa(respostas_depositos=None):
+    chamadas = []
+
+    def transporte(metodo, caminho, corpo):
+        chamadas.append((caminho, corpo))
+        if caminho == "/api/v1/depositos":
+            return respostas_depositos or (200, {}, {"resultados": []})
+        return 200, {}, {"resultados": [{"alerta": False, "movimento": None} for _ in corpo["transacoes"]]}
+    return simulador.ClienteApi("http://x", "k", transporte=transporte), chamadas
+
+
+def _correr(api, sim, duracao):
+    relogio = [0.0]
+    saidas = []
+    est = simulador.simular(api, sim, velocidade=3600, duracao=duracao, passo=1, intervalo_resumo=10**9,
+                            relogio=lambda: relogio[0], dormir=lambda s: relogio.__setitem__(0, relogio[0] + s),
+                            escrever=saidas.append)
+    return est, saidas
+
+
+def test_simular_envia_depositos_antes_das_transacoes():
+    api, chamadas = _api_falsa()
+    sim = Simulador(clientes_do_treino(N_CLIENTES), datetime(2026, 5, 25, 7, 0), semente=2)
+    _correr(api, sim, 3)
+    caminhos = [c for c, _ in chamadas]
+    assert "/api/v1/depositos" in caminhos
+    primeiro = caminhos.index("/api/v1/depositos")
+    assert "/api/v1/transacoes" not in caminhos[:primeiro]  # os depósitos vão antes das transações do passo
+    corpo = chamadas[primeiro][1]["depositos"]
+    assert len(corpo) == N_CLIENTES and set(corpo[0]) == {"id_deposito", "cliente", "valor", "data_hora", "descricao"}
+
+
+def test_simular_continua_se_os_clientes_nao_tem_conta(capsys):
+    api, chamadas = _api_falsa((422, {}, {"mensagem": "sem conta"}))
+    sim = Simulador(clientes_do_treino(N_CLIENTES), datetime(2026, 5, 25, 7, 0), semente=2)
+    est, saidas = _correr(api, sim, 6)
+    assert est.enviadas > 0
+    avisos = [s for s in saidas if "gerir.py preparar" in s]
+    assert avisos == ["Os clientes do simulador não têm conta no banco: corra gerir.py preparar."]
+    assert sum(c == "/api/v1/depositos" for c, _ in chamadas) == 1  # não insiste
+
+
+def test_estatisticas_contam_recusas_por_saldo_e_retencoes():
+    est = Estatisticas()
+    env = {"simulacao": {"fraude": False, "tipo": ""}}
+    est.registar(env, {"movimento": {"estado": "recusado", "motivo": "Saldo insuficiente."}})
+    est.registar(env, {"movimento": {"estado": "recusado", "motivo": "Outro."}})
+    est.registar(env, {"movimento": {"estado": "retido", "motivo": "x"}})
+    est.registar(env, {"movimento": None})
+    est.registar(env, {})
+    assert (est.recusadas_saldo, est.retidas) == (1, 1)
+    assert "recusadas por saldo 1 · retidas 1" in simulador.resumo(est, datetime(2026, 5, 1))
