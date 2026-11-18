@@ -93,7 +93,7 @@ def test_criar_cliente_redireciona_para_a_ficha_e_audita(app_balcao, cliente_bal
     r = _novo(cliente_balcao)
     assert r.status_code == 302 and r.headers["Location"].endswith("/balcao/clientes/1")
     acoes = _acoes(app_balcao)
-    assert ("cliente_criado", "C0001") in acoes and ("conta_aberta", "C0001") in acoes
+    assert ("cliente_criado", "C0301") in acoes and ("conta_aberta", "C0301") in acoes
     assert "Ana Maria Sitoe" in cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
 
 
@@ -115,7 +115,7 @@ def test_deposito_aparece_na_ficha(app_balcao, cliente_balcao):
     assert r.status_code == 302
     pagina = cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
     assert "1.500" in pagina and "Abertura" in pagina
-    assert ("deposito", "C0001") in _acoes(app_balcao)
+    assert ("deposito", "C0301") in _acoes(app_balcao)
 
 
 def test_deposito_invalido_da_400(cliente_balcao):
@@ -135,7 +135,7 @@ def test_editar_cliente(app_balcao, cliente_balcao):
     _novo(cliente_balcao)
     r = cliente_balcao.post("/balcao/clientes/1/editar", data={"telefone": "851111111", "email": "",
                                                                "morada": "Rua Nova 1", "cidade": "BEIRA"})
-    assert r.status_code == 302 and ("cliente_alterado", "C0001") in _acoes(app_balcao)
+    assert r.status_code == 302 and ("cliente_alterado", "C0301") in _acoes(app_balcao)
     assert cliente_balcao.post("/balcao/clientes/1/editar", data={"telefone": "1", "email": "",
                                                                   "morada": "x", "cidade": "BEIRA"}).status_code == 400
 
@@ -147,9 +147,9 @@ def test_bloquear_e_desbloquear(app_balcao, cliente_balcao):
     assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 400
     cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "0"})
     assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 302
-    assert ("conta_bancaria_bloqueada", "C0001") in _acoes(app_balcao)
+    assert ("conta_bancaria_bloqueada", "C0301") in _acoes(app_balcao)
     cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "0"})
-    assert ("conta_bancaria_desbloqueada", "C0001") in _acoes(app_balcao)
+    assert ("conta_bancaria_desbloqueada", "C0301") in _acoes(app_balcao)
 
 
 def test_cliente_inexistente_da_404(cliente_balcao):
@@ -203,7 +203,7 @@ def test_levantamento_autorizado(app_balcao, cliente_balcao, monkeypatch):
     pagina = _levantar(cliente_balcao).get_data(as_text=True)
     assert "Levantamento autorizado. Entregue o dinheiro." in pagina
     assert "900,00 MT" in pagina and "Levantamento" in pagina
-    assert ("levantamento", "C0001") in _acoes(app_balcao)
+    assert ("levantamento", "C0301") in _acoes(app_balcao)
 
 
 def test_levantamento_retido_manda_nao_entregar(app_balcao, cliente_balcao, monkeypatch):
@@ -211,7 +211,7 @@ def test_levantamento_retido_manda_nao_entregar(app_balcao, cliente_balcao, monk
     _com_saldo(cliente_balcao)
     pagina = _levantar(cliente_balcao).get_data(as_text=True)
     assert "Em verificação." in pagina and "Não entregue o dinheiro" in pagina
-    assert "Retido" in pagina and ("levantamento", "C0001") in _acoes(app_balcao)
+    assert "Retido" in pagina and ("levantamento", "C0301") in _acoes(app_balcao)
 
 
 def test_levantamento_recusado_mostra_o_motivo(app_balcao, cliente_balcao, monkeypatch):
@@ -219,7 +219,7 @@ def test_levantamento_recusado_mostra_o_motivo(app_balcao, cliente_balcao, monke
     _com_saldo(cliente_balcao, "50,00")
     pagina = _levantar(cliente_balcao, "100,00", cidade="BEIRA").get_data(as_text=True)
     assert "Saldo insuficiente." in pagina
-    assert ("levantamento", "C0001") in _acoes(app_balcao)
+    assert ("levantamento", "C0301") in _acoes(app_balcao)
 
 
 def test_levantamento_invalido_da_400(cliente_balcao, monkeypatch):

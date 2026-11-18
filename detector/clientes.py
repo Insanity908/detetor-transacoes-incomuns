@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from detector.banco import Cliente, ContaBancaria
-from detector.gerador import CIDADES
+from detector.gerador import CIDADES, N_CLIENTES_TREINO
 
 IDADE_MINIMA = 18
 TIPOS_DOCUMENTO = ("BI", "NUIT")
@@ -91,6 +91,7 @@ def _numero_conta(numero_cliente: int) -> str:
 def _proximo_codigo(s) -> str:
     codigos = s.scalars(select(Cliente.codigo))
     maior = max((int(c[1:]) for c in codigos if c[:1] == "C" and c[1:].isdigit()), default=0)
+    maior = max(maior, N_CLIENTES_TREINO)  # C0001..C0300 são dos clientes do treino, nunca de um cliente novo
     return f"C{maior + 1:04d}"
 
 
@@ -219,8 +220,10 @@ def criar_sinteticos(sessoes, perfis: list[dict], semente: int = 42) -> int:
         saldo = round(perfil["tipico"] * perfil["taxa"] * 90 * 100)
         existente = obter_por_codigo(sessoes, codigo)
         if existente is not None:
+            if not existente.sintetico:
+                raise ValueError(f"O código {codigo} já pertence a um cliente real; não pode ser de um cliente de treino.")
             # reparação: ficha criada mas depósito inicial em falta (falha entre os dois passos)
-            if (existente.sintetico and saldo > 0 and existente.conta.saldo == 0
+            if (saldo > 0 and existente.conta.saldo == 0
                     and not contas_bancarias.extrato(sessoes, existente.conta.id, 1)):
                 contas_bancarias.depositar(sessoes, existente.conta.id, saldo, "balcao", "sistema", None,
                                            "Saldo inicial")

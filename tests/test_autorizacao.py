@@ -188,7 +188,7 @@ def test_historico_inclui_a_origem_banco(sessoes, artefatos, monkeypatch):
     c = _conta(sessoes, 1, 100000)
     _forcar(monkeypatch, ("Normal", 5.0))
     autorizar(sessoes, artefatos, [_pedido(c, 1000)], Cortes(), "banco")
-    h = repositorio.historico_api(sessoes, {"C0001"}, AGORA - timedelta(days=1))
+    h = repositorio.historico_api(sessoes, {"C0301"}, AGORA - timedelta(days=1))
     assert len(h) == 1
     assert contas_bancarias.verificar_saldos(sessoes) == []
 

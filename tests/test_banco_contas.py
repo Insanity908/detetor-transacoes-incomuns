@@ -51,10 +51,10 @@ def test_pesquisar_ignora_maiusculas_acentos_e_escapa_curingas(sessoes):
 
 def test_criar_cliente_abre_conta_com_saldo_zero(sessoes):
     c = _novo(sessoes)
-    assert c.codigo == "C0001"
+    assert c.codigo == "C0301"  # os códigos até C0300 são dos clientes do treino
     assert c.conta.saldo == 0 and c.conta.estado == "ativa"
     assert len(c.conta.numero) == 12
-    assert _novo(sessoes, numero_documento="987654321").codigo == "C0002"
+    assert _novo(sessoes, numero_documento="987654321").codigo == "C0302"
 
 
 def test_documento_repetido_e_recusado(sessoes):
@@ -122,7 +122,7 @@ def test_sinteticos_passam_a_validacao_e_tem_documentos_unicos(sessoes):
 
 def test_cliente_novo_continua_a_numeracao(sessoes):
     clientes.criar_sinteticos(sessoes, _perfis(5))
-    assert _novo(sessoes).codigo == "C0006"
+    assert _novo(sessoes).codigo == "C0301"
 
 
 def test_verificar_saldos_pelo_gerir(pasta_pequena, capsys):
@@ -266,3 +266,25 @@ def test_movimento_da_transacao(sessoes):
     cid = _conta_com(sessoes, 1000)
     with sessoes.begin() as s:
         assert contas_bancarias.movimento_da_transacao(s, 999) is None
+
+
+def test_sintetico_nao_reutiliza_codigo_de_cliente_real(sessoes):
+    clientes.criar(sessoes, clientes.validar(dict(
+        nome="Ana Sitoe", data_nascimento="1990-05-10", tipo_documento="NUIT", numero_documento="123456789",
+        telefone="841234567", email="", cidade="MAPUTO", morada="Rua 1")), "teste", codigo="C0002")
+    with pytest.raises(ValueError, match="cliente real"):
+        clientes.criar_sinteticos(sessoes, _perfis(5))
+
+
+def test_preparar_cria_os_clientes_de_treino(pasta_pequena, monkeypatch, capsys):
+    import gerir
+    chamadas = []
+    monkeypatch.setattr(gerir, "treinar", lambda *a, **k: None)
+    monkeypatch.setattr(gerir, "criar_sinteticos", lambda *a, **k: chamadas.append(1))
+    monkeypatch.setattr(gerir, "verificar", lambda: 0)
+    monkeypatch.setattr(gerir, "criar_env", lambda: False)
+    monkeypatch.setattr(gerir, "banco", lambda: None)
+    monkeypatch.setattr(gerir, "_sessoes", lambda: __import__("app").criar_app(pasta_pequena).config["SESSOES"])
+    monkeypatch.setattr("sys.stdin", type("S", (), {"isatty": lambda self: False})())
+    assert gerir.main(["preparar"]) == 0
+    assert chamadas == [1]

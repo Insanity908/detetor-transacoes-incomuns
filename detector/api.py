@@ -200,7 +200,7 @@ def _contas_dos_clientes(sessoes, codigos: set[str]) -> dict[str, int]:
 def _centimos(valor, indice: int, erros: list) -> int | None:
     """O valor em MT como cêntimos inteiros; acrescenta o erro (e devolve None) se não for válido."""
     try:
-        return dinheiro.para_centavos(str(valor))
+        return dinheiro.para_centavos(valor if isinstance(valor, (int, float)) else str(valor))  # número JSON: decimal
     except ValueError as exc:
         erros.append({"indice": indice, "campo": "valor", "erro": str(exc)})
         return None

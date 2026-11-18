@@ -11,6 +11,7 @@ def para_centavos(texto: str | int | float) -> int:
     """Converte "1 234,50", "1.234,50", "1.500" (milhares), "1234.5" ou um número em cêntimos; recusa o que não for um valor válido."""
     if isinstance(texto, bool):
         raise ValueError("Valor inválido.")
+    milhares_com_ponto = isinstance(texto, str)  # um número (float) nunca usa o ponto como milhares
     if isinstance(texto, (int, float)):
         bruto = str(texto)
     else:
@@ -24,7 +25,7 @@ def para_centavos(texto: str | int | float) -> int:
         raise ValueError("Indique um valor.")
     if "," in bruto:
         bruto = bruto.replace(".", "").replace(",", ".")  # vírgula decimal, ponto de milhares
-    elif bruto.count(".") > 1 or re.fullmatch(r"[1-9][0-9]{0,2}\.[0-9]{3}", bruto):
+    elif bruto.count(".") > 1 or (milhares_com_ponto and re.fullmatch(r"[1-9][0-9]{0,2}\.[0-9]{3}", bruto)):
         # vários pontos, ou um só ponto seguido de três algarismos ("1.500"): separador de milhares
         if not re.fullmatch(r"-?[0-9]{1,3}(\.[0-9]{3})+", bruto):
             raise ValueError("Valor inválido: use apenas algarismos, por exemplo 1 234,50.")
