@@ -21,7 +21,13 @@ class Base(DeclarativeBase):
     pass
 
 
-PERFIS = ("analista", "supervisor", "administrador")  # do menor para o maior acesso
+PERFIS = ("balcao", "analista", "supervisor", "administrador")  # o Balcão é à parte: só vê a sua área
+AREAS_PERFIL = {
+    "balcao": {"balcao"},
+    "analista": {"alertas"},
+    "supervisor": {"alertas", "supervisao"},
+    "administrador": {"balcao", "alertas", "supervisao", "administracao"},
+}
 
 
 class Utilizador(Base):
@@ -31,7 +37,7 @@ class Utilizador(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     nome_utilizador: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     nome: Mapped[str] = mapped_column(String(120))
-    perfil: Mapped[str] = mapped_column(String(20))  # analista | supervisor | administrador
+    perfil: Mapped[str] = mapped_column(String(20))  # balcao | analista | supervisor | administrador
     senha_hash: Mapped[str] = mapped_column(String(255))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)  # depois de o administrador a redefinir
@@ -43,7 +49,12 @@ class Utilizador(Base):
     ultimo_alerta_visto: Mapped[int] = mapped_column(Integer, default=0)  # para o sino de notificações
 
     def pode(self, perfil_minimo: str) -> bool:
+        if "balcao" in (self.perfil, perfil_minimo):  # o Balcão não se compara com os perfis do detetor
+            return self.perfil == perfil_minimo
         return PERFIS.index(self.perfil) >= PERFIS.index(perfil_minimo)
+
+    def tem_area(self, area: str) -> bool:
+        return area in AREAS_PERFIL.get(self.perfil, ())
 
 
 class EventoAuditoria(Base):

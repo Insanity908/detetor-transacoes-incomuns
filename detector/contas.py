@@ -11,7 +11,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .banco import PERFIS, Utilizador
 
-NOMES_PERFIL = {"analista": "Analista", "supervisor": "Supervisor", "administrador": "Administrador"}
+NOMES_PERFIL = {"balcao": "Balcão", "analista": "Analista", "supervisor": "Supervisor", "administrador": "Administrador"}
 MAX_TENTATIVAS = 5
 TEMPO_BLOQUEIO = timedelta(minutes=15)
 PADRAO_NOME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,49}$")

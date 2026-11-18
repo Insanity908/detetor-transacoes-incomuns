@@ -18,6 +18,7 @@ from . import auditoria, contas
 from .banco import PERFIS
 
 PUBLICOS = frozenset({"static", "saude", "entrar", "entrar_post"})
+ENDPOINTS_BALCAO: set[str] = set()  # preenchido por web_balcao: as únicas páginas que o perfil Balcão abre
 LIVRES_DURANTE_TROCA = frozenset({"senha", "senha_post", "sair"})  # quando a senha tem de ser mudada
 METODOS_PROTEGIDOS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 CAMPO_CSRF = "csrf_token"
@@ -51,11 +52,31 @@ def exige(perfil_minimo: str):
                 return redirect(url_for("entrar"))
             if not u.pode(perfil_minimo):
                 auditar("acesso_negado", alvo=request.path, detalhe=f"exige perfil {perfil_minimo}")
-                return render_template("erro.html", titulo="Acesso negado",
-                                       mensagem="O seu perfil não dá acesso a esta página."), 403
+                return _negado()
             return vista(*args, **kwargs)
         return envolvida
     return decorador
+
+
+def exige_area(area: str):
+    """Só deixa passar quem tem acesso a esta área; os outros recebem 403 e a tentativa fica registada."""
+    def decorador(vista):
+        @wraps(vista)
+        def envolvida(*args, **kwargs):
+            u = utilizador_atual()
+            if u is None:
+                return redirect(url_for("entrar"))
+            if not u.tem_area(area):
+                auditar("acesso_negado", alvo=request.path, detalhe=f"exige a área {area}")
+                return _negado()
+            return vista(*args, **kwargs)
+        return envolvida
+    return decorador
+
+
+def _negado():
+    return render_template("erro.html", titulo="Acesso negado",
+                           mensagem="O seu perfil não dá acesso a esta página."), 403
 
 
 def impressao(u) -> str:
@@ -126,6 +147,11 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
             return redirect(url_for("entrar", proximo=proximo))
         if g.utilizador.trocar_senha and request.endpoint not in LIVRES_DURANTE_TROCA:
             return redirect(url_for("senha"))
+        if g.utilizador.perfil == "balcao" and request.endpoint not in LIVRES_DURANTE_TROCA | ENDPOINTS_BALCAO:
+            if request.path == "/" and request.method == "GET":
+                return redirect("/balcao/clientes")
+            auditar("acesso_negado", alvo=request.path, detalhe="o perfil Balcão só abre a sua área")
+            return _negado()
         return None
 
     @app.before_request

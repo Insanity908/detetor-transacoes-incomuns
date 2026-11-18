@@ -13,16 +13,21 @@
       <p class="marca">Detetor de Fraudes Financeiras <span>INAR</span></p>
       {% if utilizador and not utilizador.trocar_senha %}
       <nav aria-label="Páginas">
+        {% if utilizador.tem_area('balcao') %}
+        <a href="/balcao/clientes" {% if aba and aba.startswith('balcao') %}aria-current="page"{% endif %}>Clientes</a>
+        {% endif %}
+        {% if utilizador.tem_area('alertas') %}
         <a href="/alertas" {% if aba in ('fila_alertas', 'alerta') %}aria-current="page"{% endif %}>Alertas</a>
         <a href="/" {% if aba in ('testar', 'testar_post') %}aria-current="page"{% endif %}>Testar transação</a>
         <a href="/analisar" {% if aba and aba.startswith('analisar') %}aria-current="page"{% endif %}>Analisar ficheiro</a>
         <a href="/perfil" {% if aba == 'perfil' %}aria-current="page"{% endif %}>Perfil do cliente</a>
         <a href="/modelos" {% if aba == 'modelos' %}aria-current="page"{% endif %}>Modelos</a>
-        {% if utilizador.pode('supervisor') %}
+        {% endif %}
+        {% if utilizador.tem_area('supervisao') %}
         <a href="/painel" {% if aba == 'painel' %}aria-current="page"{% endif %}>Painel</a>
         <a href="/auditoria" {% if aba == 'ver_auditoria' %}aria-current="page"{% endif %}>Auditoria</a>
         {% endif %}
-        {% if utilizador.pode('administrador') %}
+        {% if utilizador.tem_area('administracao') %}
         <a href="/utilizadores" {% if aba and aba.startswith('utilizador') %}aria-current="page"{% endif %}>Utilizadores</a>
         <a href="/chaves" {% if aba and (aba.startswith('chave') or aba == 'api_docs') %}aria-current="page"{% endif %}>API</a>
         {% endif %}
@@ -30,7 +35,7 @@
       {% endif %}
       {% if utilizador %}
       <div class="conta">
-        {% if not utilizador.trocar_senha %}
+        {% if not utilizador.trocar_senha and utilizador.tem_area('alertas') %}
         <a href="/notificacoes" class="sino" {% if aba == 'ver_notificacoes' %}aria-current="page"{% endif %}
            aria-label="Notificações: {{ notificacoes_novas }} alerta(s) novo(s) de alto risco">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
@@ -48,7 +53,7 @@
     </div>
   </header>
   <main class="moldura">
-    {% if aviso_modelo and aba != 'modelos' %}<p class="aviso aviso-erro" role="alert">O desempenho do modelo caiu nas transações recentes.
+    {% if aviso_modelo and aba != 'modelos' and utilizador.tem_area('alertas') %}<p class="aviso aviso-erro" role="alert">O desempenho do modelo caiu nas transações recentes.
       <a href="/modelos">Ver a monitorização e treinar uma nova versão</a>.</p>{% endif %}
     {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% for categoria, mensagem in mensagens %}<p class="aviso aviso-{{ categoria }}" role="{{ 'alert' if categoria == 'erro' else 'status' }}">{{ mensagem }}</p>{% endfor %}
