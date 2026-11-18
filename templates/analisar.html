@@ -7,6 +7,7 @@
   O histórico de cada cliente vem dos dados de treino e das linhas anteriores do próprio ficheiro.
   Um ficheiro grande, perto dos 5 MB, pode demorar até um minuto a ser analisado.</p>
 <form method="post" action="/analisar" enctype="multipart/form-data" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Ficheiro CSV <input type="file" name="ficheiro" accept=".csv,text/csv" required></label>
   <button type="submit" class="principal">Analisar</button>
 </form>
@@ -14,11 +15,13 @@
 
 {% if recentes and not chave %}
 <h2>Análises recentes</h2>
+{% if not ve_tudo %}<p class="ajuda">Só as suas análises. O supervisor vê as de toda a equipa.</p>{% endif %}
 <div class="rolagem"><table class="recentes">
-  <thead><tr><th>Data</th><th>Ficheiro</th><th class="num">Transações</th><th class="num">Com alerta</th><th></th></tr></thead>
+  <thead><tr><th>Data</th><th>Ficheiro</th>{% if ve_tudo %}<th>Utilizador</th>{% endif %}<th class="num">Transações</th><th class="num">Com alerta</th><th></th></tr></thead>
   <tbody>
   {% for a in recentes %}
     <tr><td>{{ a.criada_em.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ a.nome_ficheiro or '—' }}</td>
+      {% if ve_tudo %}<td>{{ a.utilizador.nome_utilizador if a.utilizador else '—' }}</td>{% endif %}
       <td class="num">{{ a.total }}</td><td class="num">{{ a.alertas }}</td>
       <td><a href="/analisar/{{ a.chave }}">Abrir</a></td></tr>
   {% endfor %}

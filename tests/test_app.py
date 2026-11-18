@@ -1,6 +1,7 @@
 import pytest
 
 from app import criar_app
+from tests.conftest import criar_cliente
 from detector.exemplos import NOMES, criar_exemplos
 
 FORM = dict(cliente="C0001", data_hora="2026-05-01T14:30", valor="150", cidade="Maputo", pais="MZ",
@@ -8,7 +9,7 @@ FORM = dict(cliente="C0001", data_hora="2026-05-01T14:30", valor="150", cidade="
 
 
 def test_sem_modelos_mostra_a_instrucao(tmp_path):
-    r = criar_app(tmp_path).test_client().get("/")
+    r = criar_cliente(criar_app(tmp_path)).get("/")
     assert r.status_code == 503 and "python treinar.py" in r.get_data(as_text=True)
 
 

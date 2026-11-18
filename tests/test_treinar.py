@@ -4,13 +4,16 @@ import pytest
 
 from detector.artefatos import carregar
 from detector.modelos import ORDEM_SIMPLICIDADE, escolher_modelo
+from tests.conftest import CHAVE_TESTE
 from treinar import executar
 
 
 @pytest.fixture(scope="module")
 def resultado(tmp_path_factory):
     raiz = tmp_path_factory.mktemp("treino")
-    return executar(raiz / "modelos", raiz / "data", raiz / "RELATORIO.md", n_clientes=120), raiz
+    with pytest.MonkeyPatch.context() as mp:  # assina os modelos com a mesma chave que os testes usam para ler
+        mp.setenv("CHAVE_SECRETA", CHAVE_TESTE)
+        return executar(raiz / "modelos", raiz / "data", raiz / "RELATORIO.md", n_clientes=120), raiz
 
 
 def test_grava_tudo_o_que_a_interface_precisa(resultado):

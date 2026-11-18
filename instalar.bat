@@ -31,11 +31,12 @@ if not exist ".venv\Scripts\python.exe" (
 echo [2/3] A instalar as dependencias ...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt || goto :falhou
 
-echo [3/3] A preparar a configuracao, a base de dados, e os modelos ...
+echo [3/3] A preparar a configuracao, a base de dados, os modelos e a conta de administrador ...
 ".venv\Scripts\python.exe" gerir.py preparar || goto :falhou
 
 echo.
 echo Instalacao concluida. Para ligar o sistema, execute o iniciar.bat
+echo e entre com a conta de administrador que acabou de criar.
 echo.
 pause
 exit /b 0

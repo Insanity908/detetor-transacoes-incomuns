@@ -10,12 +10,30 @@
   <header>
     <div class="moldura">
       <p class="marca">Detetor de Fraudes Financeiras <span>INAR</span></p>
+      {% if utilizador and not utilizador.trocar_senha %}
       <nav aria-label="Páginas">
         <a href="/" {% if aba in ('testar', 'testar_post') %}aria-current="page"{% endif %}>Testar transação</a>
         <a href="/analisar" {% if aba and aba.startswith('analisar') %}aria-current="page"{% endif %}>Analisar ficheiro</a>
         <a href="/perfil" {% if aba == 'perfil' %}aria-current="page"{% endif %}>Perfil do cliente</a>
         <a href="/modelos" {% if aba == 'modelos' %}aria-current="page"{% endif %}>Modelos</a>
+        {% if utilizador.pode('supervisor') %}
+        <a href="/auditoria" {% if aba == 'ver_auditoria' %}aria-current="page"{% endif %}>Auditoria</a>
+        {% endif %}
+        {% if utilizador.pode('administrador') %}
+        <a href="/utilizadores" {% if aba and aba.startswith('utilizador') %}aria-current="page"{% endif %}>Utilizadores</a>
+        {% endif %}
       </nav>
+      {% endif %}
+      {% if utilizador %}
+      <div class="conta">
+        <span>{{ utilizador.nome }} <small>{{ nomes_perfil[utilizador.perfil] }}</small></span>
+        <a href="/conta/senha" {% if aba and aba.startswith('senha') %}aria-current="page"{% endif %}>Senha</a>
+        <form method="post" action="/sair">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ligacao">Sair</button>
+        </form>
+      </div>
+      {% endif %}
     </div>
   </header>
   <main class="moldura">

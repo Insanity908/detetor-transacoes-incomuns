@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<p><a href="/utilizadores">← Utilizadores</a></p>
+<h1>{{ alvo.nome_utilizador }}</h1>
+<p class="ajuda">Criado em {{ alvo.criado_em.strftime('%d/%m/%Y') }} ·
+  último acesso {{ alvo.ultimo_acesso.strftime('%d/%m/%Y %H:%M') if alvo.ultimo_acesso else 'nunca' }} ·
+  <a href="/auditoria?utilizador={{ alvo.nome_utilizador | urlencode }}">ver o que fez</a></p>
+{% if mensagem %}<p class="sucesso" role="status">{{ mensagem }}</p>{% endif %}
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+<div class="colunas">
+  <section aria-labelledby="titulo-dados">
+    <h2 id="titulo-dados">Dados e perfil</h2>
+    <form method="post" action="/utilizadores/{{ alvo.id }}" class="pilha">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Nome completo <input name="nome" value="{{ alvo.nome }}" required></label>
+      <label>Perfil
+        <select name="perfil">
+          {% for p in perfis %}<option value="{{ p }}" {% if alvo.perfil == p %}selected{% endif %}>{{ nomes_perfil[p] }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="opcao"><input type="checkbox" name="ativo" value="1" {% if alvo.ativo %}checked{% endif %}> Conta ativa</label>
+      <p class="ajuda">Mudar o perfil ou desativar termina as sessões abertas desta conta.</p>
+      <button type="submit" class="principal">Gravar</button>
+    </form>
+  </section>
+  <section aria-labelledby="titulo-redefinir">
+    <h2 id="titulo-redefinir">Redefinir senha</h2>
+    <p class="ajuda">Para quem esqueceu a senha. A pessoa terá de escolher uma nova ao entrar.</p>
+    <form method="post" action="/utilizadores/{{ alvo.id }}/senha" class="pilha">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Senha temporária <input name="senha" type="password" required minlength="10" autocomplete="new-password"></label>
+      <button type="submit" class="secundario">Redefinir senha</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

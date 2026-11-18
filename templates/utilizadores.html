@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Utilizadores</h1>
+<p class="ajuda"><strong>Analista</strong> testa transações, analisa ficheiros e vê só as suas análises.
+  <strong>Supervisor</strong> vê também as análises de toda a equipa e a auditoria.
+  <strong>Administrador</strong> pode ainda criar e gerir contas.</p>
+
+<div class="rolagem"><table>
+  <thead><tr><th>Utilizador</th><th>Nome</th><th>Perfil</th><th>Estado</th><th>Último acesso</th><th></th></tr></thead>
+  <tbody>
+  {% for u in utilizadores %}
+    <tr>
+      <td>{{ u.nome_utilizador }}</td><td>{{ u.nome }}</td><td>{{ nomes_perfil[u.perfil] }}</td>
+      <td>{% if not u.ativo %}Desativado{% elif u.trocar_senha %}Tem de mudar a senha{% else %}Ativo{% endif %}</td>
+      <td>{{ u.ultimo_acesso.strftime('%d/%m/%Y %H:%M') if u.ultimo_acesso else 'Nunca' }}</td>
+      <td><a href="/utilizadores/{{ u.id }}">Gerir</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2 class="separado">Criar utilizador</h2>
+{% if criado %}<p class="sucesso" role="status">Conta <strong>{{ criado }}</strong> criada. Entregue a senha temporária à pessoa; ela terá de a mudar ao entrar.</p>{% endif %}
+<form method="post" action="/utilizadores" class="formulario">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Nome de utilizador
+    <input name="nome_utilizador" value="{{ valores.nome_utilizador or '' }}" required autocomplete="off"
+           autocapitalize="none" placeholder="ana.silva">
+  </label>
+  <label>Nome completo <input name="nome" value="{{ valores.nome or '' }}" required autocomplete="off"></label>
+  <label>Perfil
+    <select name="perfil">
+      {% for p in perfis %}<option value="{{ p }}" {% if valores.perfil == p %}selected{% endif %}>{{ nomes_perfil[p] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Senha temporária <input name="senha" type="password" required minlength="10" autocomplete="new-password"></label>
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  <button type="submit" class="principal">Criar utilizador</button>
+</form>
+{% endblock %}

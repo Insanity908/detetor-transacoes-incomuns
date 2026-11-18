@@ -8,6 +8,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 
 from app import criar_app
+from tests.conftest import criar_cliente
 from detector import repositorio
 from detector.banco import Base, criar_fabrica_sessoes, criar_motor, migrar
 from detector.configuracao import ler_configuracao
@@ -92,9 +93,9 @@ def test_repositorio_guarda_e_le_pela_mesma_ordem(ambiente_de_teste):
 
 # ------------------------------------------------------------ persistência
 def test_analise_sobrevive_ao_reinicio(pasta_pequena):
-    html = _enviar(criar_app(pasta_pequena).test_client()).get_data(as_text=True)
+    html = _enviar(criar_cliente(criar_app(pasta_pequena))).get_data(as_text=True)
     chave = re.search(r"/analisar/([\w-]+)\.csv", html).group(1)
-    novo = criar_app(pasta_pequena).test_client()  # outra instância, como depois de reiniciar o servidor
+    novo = criar_cliente(criar_app(pasta_pequena))  # outra instância, como depois de reiniciar o servidor
     assert novo.get(f"/analisar/{chave}").status_code == 200
     r = novo.get(f"/analisar/{chave}.csv")
     assert r.status_code == 200 and r.data.decode("utf-8-sig").count("\r\n") == 3
@@ -126,7 +127,7 @@ def test_saude_sem_modelos_responde_503_em_json(tmp_path):
 
 def test_pedidos_e_analises_ficam_no_ficheiro_de_log(pasta_pequena, ambiente_de_teste, monkeypatch):
     monkeypatch.setenv("NIVEL_LOG", "INFO")
-    cliente = criar_app(pasta_pequena).test_client()
+    cliente = criar_cliente(criar_app(pasta_pequena))
     _enviar(cliente, nome="registado.csv")
     texto = (ambiente_de_teste / "logs" / "detetor.log").read_text(encoding="utf-8")
     assert "Modelos carregados" in texto and "POST /analisar 200" in texto and "'registado.csv' analisado" in texto
@@ -139,7 +140,7 @@ def test_erro_inesperado_mostra_pagina_amigavel_e_fica_registado(pasta_pequena, 
     def _falha():
         raise RuntimeError("falha simulada")
 
-    r = app.test_client().get("/falha-de-teste")
+    r = criar_cliente(app).get("/falha-de-teste")
     assert r.status_code == 500 and "erro inesperado" in r.get_data(as_text=True)
     assert "falha simulada" in (ambiente_de_teste / "logs" / "detetor.log").read_text(encoding="utf-8")
 
@@ -161,5 +162,5 @@ def test_env_exemplo_tem_todas_as_variaveis():
     from pathlib import Path
     texto = (Path(__file__).parent.parent / ".env.exemplo").read_text(encoding="utf-8")
     for nome in ("AMBIENTE", "CHAVE_SECRETA", "URL_BANCO", "PASTA_MODELOS", "PASTA_LOGS", "NIVEL_LOG",
-                 "HOST", "PORTA", "THREADS"):
+                 "HOST", "PORTA", "THREADS", "SESSAO_HORAS"):
         assert re.search(rf"^{nome}=", texto, re.M), nome

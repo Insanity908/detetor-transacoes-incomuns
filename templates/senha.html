@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<section class="cartao-entrada" aria-labelledby="titulo-senha">
+  <h1 id="titulo-senha">Mudar a senha</h1>
+  {% if sucesso %}
+  <p class="sucesso" role="status">Senha alterada. As outras sessões abertas com esta conta foram terminadas.</p>
+  <p><a href="/">Continuar</a></p>
+  {% else %}
+  {% if utilizador.trocar_senha %}
+  <p class="erro" role="alert">A sua senha foi definida pelo administrador. Escolha uma senha nova para continuar.</p>
+  {% endif %}
+  <p class="ajuda">Pelo menos 10 caracteres, sem o nome de utilizador. Uma frase curta é fácil de lembrar e difícil de adivinhar.</p>
+  <form method="post" action="/conta/senha" class="pilha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Senha atual <input name="senha_atual" type="password" required autocomplete="current-password"></label>
+    <label>Senha nova <input name="senha_nova" type="password" required minlength="10" autocomplete="new-password"></label>
+    <label>Repita a senha nova <input name="confirmacao" type="password" required minlength="10" autocomplete="new-password"></label>
+    {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+    <button type="submit" class="principal">Gravar senha nova</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

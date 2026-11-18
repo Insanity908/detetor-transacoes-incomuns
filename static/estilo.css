@@ -95,3 +95,21 @@ table.estreita { max-width: 32rem; }
   .hora small { font-size: .55rem; }
   .hora:nth-child(odd) small { visibility: hidden; }
 }
+
+/* Contas e acesso */
+.conta { display: flex; align-items: center; gap: .25rem .75rem; flex-wrap: wrap; font-size: .9rem; }
+.conta small { opacity: .7; margin-left: .25rem; }
+.conta a { color: #dfe7ee; text-decoration: none; padding: .35rem .5rem; border-radius: 3px; }
+.conta a:hover, .conta .ligacao:hover { background: rgba(255,255,255,.1); }
+.conta a[aria-current="page"] { background: #fff; color: var(--tinta); font-weight: 600; }
+.conta form { margin: 0; }
+.ligacao { background: none; border: 0; color: #dfe7ee; padding: .35rem .5rem; }
+.cartao-entrada { max-width: 26rem; margin: 2rem auto; background: var(--superficie); border: 1px solid var(--linha);
+  border-radius: 3px; padding: 1.5rem 1.5rem 1.75rem; }
+.pilha { display: grid; gap: .8rem; }
+.pilha .principal, .pilha .secundario { justify-self: start; }
+.opcao { display: flex; align-items: center; gap: .5rem; font-weight: 400; }
+.opcao input { width: auto; min-height: 0; }
+.sucesso { color: var(--normal); font-weight: 600; }
+.separado { margin-top: 2rem; }
+.filtros label { flex: 1 1 10rem; }

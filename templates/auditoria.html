@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Auditoria</h1>
+<p class="ajuda">Tudo o que foi feito no sistema: entradas, análises, consultas de alertas e de clientes e mudanças nas contas.
+  Os registos não podem ser alterados nem apagados pela interface.</p>
+<form method="get" action="/auditoria" class="envio filtros">
+  <label>Utilizador
+    <select name="utilizador"><option value="">Todos</option>
+      {% for n in nomes %}<option value="{{ n }}" {% if filtro.utilizador == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Ação
+    <select name="acao"><option value="">Todas</option>
+      {% for codigo, nome in acoes.items() %}<option value="{{ codigo }}" {% if filtro.acao == codigo %}selected{% endif %}>{{ nome }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Sobre (análise, cliente ou conta) <input name="alvo" value="{{ filtro.alvo }}" autocomplete="off"></label>
+  <label>Desde <input name="desde" type="date" value="{{ filtro.desde or '' }}"></label>
+  <label>Até <input name="ate" type="date" value="{{ filtro.ate or '' }}"></label>
+  <button type="submit" class="principal">Filtrar</button>
+</form>
+<p><strong>{{ total }}</strong> registo(s){% if paginas > 1 %} · página {{ pagina }} de {{ paginas }}{% endif %}.</p>
+<div class="rolagem"><table>
+  <thead><tr><th>Quando</th><th>Utilizador</th><th>Ação</th><th>Sobre</th><th>Detalhe</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for e in eventos %}
+    <tr class="evento-{{ e.acao }}">
+      <td class="num">{{ e.momento.strftime('%d/%m/%Y %H:%M:%S') }}</td><td>{{ e.nome_utilizador }}</td>
+      <td>{{ acoes.get(e.acao, e.acao) }}</td>
+      <td>{% if e.acao in ('analisar_ficheiro', 'consultar_analise', 'descarregar_analise') and e.alvo %}<a href="/analisar/{{ e.alvo | urlencode }}">{{ e.alvo[:10] }}…</a>
+          {% elif e.alvo %}<a href="/auditoria?alvo={{ e.alvo | urlencode }}">{{ e.alvo }}</a>{% else %}—{% endif %}</td>
+      <td>{{ e.detalhe or '' }}</td><td>{{ e.ip or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="ajuda">Nenhum registo com estes filtros.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% if paginas > 1 %}
+<p class="acoes">
+  {% if pagina > 1 %}<a href="/auditoria?{{ consulta | urlencode }}&amp;pagina={{ pagina - 1 }}">← Mais recentes</a>{% endif %}
+  {% if pagina < paginas %}<a href="/auditoria?{{ consulta | urlencode }}&amp;pagina={{ pagina + 1 }}">Mais antigos →</a>{% endif %}
+</p>
+{% endif %}
+{% endblock %}

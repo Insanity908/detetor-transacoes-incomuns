@@ -5,10 +5,13 @@ Execução, na raiz do projeto:
     python gerir.py banco               cria ou atualiza as tabelas do banco de dados
     python gerir.py treinar [--forcar]  treina os modelos (com --forcar, mesmo que já existam)
     python gerir.py verificar           mostra a configuração e se o banco e os modelos estão prontos
+    python gerir.py criar-admin         cria uma conta de administrador (pede o nome e a senha)
+    python gerir.py desbloquear NOME    reativa uma conta e limpa o bloqueio por tentativas falhadas
 """
 from __future__ import annotations
 
 import argparse
+import getpass
 import secrets
 import sys
 from pathlib import Path
@@ -52,6 +55,56 @@ def treinar(forcar: bool = False) -> None:
     print(f"Modelo escolhido: {treino.NOMES[res['escolhido']]} — F1 no teste {treino._num(teste['f1'])}.")
 
 
+def _sessoes():
+    from detector.banco import criar_fabrica_sessoes, criar_motor, migrar
+    from detector.configuracao import ler_configuracao
+    url = ler_configuracao().url_banco
+    migrar(url)
+    return criar_fabrica_sessoes(criar_motor(url))
+
+
+def criar_admin(nome_utilizador: str, nome: str, senha: str) -> None:
+    from detector import auditoria, contas
+    sessoes = _sessoes()
+    novo = contas.criar(sessoes, nome_utilizador, nome, "administrador", senha)
+    auditoria.registar(sessoes, "utilizador_criado", nome_utilizador="gerir.py", alvo=novo.nome_utilizador,
+                       detalhe="perfil administrador (linha de comandos)")
+    print(f"Administrador '{novo.nome_utilizador}' criado. Já pode entrar no sistema.")
+
+
+def criar_admin_interativo() -> None:
+    from detector.contas import SENHA_MINIMA
+    print("Criar a conta de administrador.")
+    nome_utilizador = input("Nome de utilizador [admin]: ").strip() or "admin"
+    nome = input("Nome completo [Administrador]: ").strip() or "Administrador"
+    while True:
+        senha = getpass.getpass(f"Senha (mínimo {SENHA_MINIMA} caracteres, não aparece ao escrever): ")
+        if senha != getpass.getpass("Repita a senha: "):
+            print("As senhas não são iguais. Tente de novo.")
+            continue
+        try:
+            criar_admin(nome_utilizador, nome, senha)
+            return
+        except ValueError as exc:
+            print(exc)
+            if "Já existe" in str(exc):
+                return
+
+
+def desbloquear(nome_utilizador: str) -> int:
+    from detector import contas
+    sessoes = _sessoes()
+    u = contas.obter_por_nome(sessoes, nome_utilizador)
+    if u is None:
+        print(f"Não existe o utilizador '{nome_utilizador}'.", file=sys.stderr)
+        return 1
+    with sessoes.begin() as sessao:
+        alvo = sessao.get(type(u), u.id)
+        alvo.ativo, alvo.tentativas_falhadas, alvo.bloqueado_ate = True, 0, None
+    print(f"Conta '{u.nome_utilizador}' ativa e desbloqueada.")
+    return 0
+
+
 def verificar() -> int:
     from detector.artefatos import carregar
     from detector.banco import criar_motor, descrever, verificar_ligacao
@@ -65,6 +118,14 @@ def verificar() -> int:
     print(f"Banco:     {descrever(motor)} -> {'ok' if banco_ok else 'SEM LIGAÇÃO'}")
     print(f"Modelos:   {cfg.pasta_modelos} -> {'ok' if modelos_ok else 'EM FALTA (python gerir.py treinar)'}")
     print(f"Logs:      {cfg.pasta_logs}")
+    if banco_ok:
+        from detector import contas
+        from detector.banco import criar_fabrica_sessoes
+        try:
+            n = contas.contar(criar_fabrica_sessoes(motor))
+            print(f"Contas:    {n}" + ("" if n else " -> NENHUMA (python gerir.py criar-admin)"))
+        except Exception:  # banco ainda sem as tabelas da Fase 2
+            print("Contas:    tabelas em falta -> python gerir.py banco")
     motor.dispose()
     return 0 if banco_ok and modelos_ok else 1
 
@@ -78,6 +139,9 @@ def main(argv: list[str] | None = None) -> int:
     t = comandos.add_parser("treinar", help="treina os modelos")
     t.add_argument("--forcar", action="store_true", help="treina mesmo que os modelos já existam")
     comandos.add_parser("verificar", help="mostra a configuração e o estado")
+    comandos.add_parser("criar-admin", help="cria uma conta de administrador")
+    d = comandos.add_parser("desbloquear", help="reativa e desbloqueia uma conta")
+    d.add_argument("nome_utilizador")
     args = analisador.parse_args(argv)
 
     try:
@@ -85,6 +149,12 @@ def main(argv: list[str] | None = None) -> int:
             print("Ficheiro .env criado." if criar_env() else "Ficheiro .env já existe: mantido.")
             banco()
             treinar()
+            from detector import contas
+            if contas.contar(_sessoes()) == 0:
+                if sys.stdin.isatty():
+                    criar_admin_interativo()
+                else:
+                    print("Nenhuma conta criada: execute python gerir.py criar-admin")
             return verificar()
         if args.comando == "banco":
             banco()
@@ -92,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
             treinar(args.forcar)
         elif args.comando == "verificar":
             return verificar()
+        elif args.comando == "criar-admin":
+            criar_admin_interativo()
+        elif args.comando == "desbloquear":
+            return desbloquear(args.nome_utilizador)
     except ValueError as exc:
         print(f"Erro na configuração (.env): {exc}", file=sys.stderr)
         return 1

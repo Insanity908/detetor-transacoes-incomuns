@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar · Detetor de Fraudes Financeiras{% endblock %}
+{% block conteudo %}
+<section class="cartao-entrada" aria-labelledby="titulo-entrada">
+  <h1 id="titulo-entrada">Entrar</h1>
+  {% if sem_contas %}
+  <p class="erro" role="alert">Ainda não existe nenhuma conta. No computador onde o sistema está instalado, execute
+    <code>python gerir.py criar-admin</code> (ou o <code>instalar.bat</code>) para criar o primeiro administrador.</p>
+  {% else %}
+  <p class="ajuda">Use a conta que o administrador do sistema lhe deu.</p>
+  {% endif %}
+  <form method="post" action="/entrar" class="pilha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="proximo" value="{{ proximo }}">
+    <label>Nome de utilizador
+      <input name="nome_utilizador" value="{{ nome }}" required autocomplete="username" autocapitalize="none" autofocus>
+    </label>
+    <label>Senha
+      <input name="senha" type="password" required autocomplete="current-password">
+    </label>
+    {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+    <button type="submit" class="principal">Entrar</button>
+  </form>
+</section>
+{% endblock %}

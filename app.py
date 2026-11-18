@@ -15,7 +15,8 @@ import pandas as pd
 from flask import Flask, Response, abort, g, jsonify, render_template, request, send_from_directory
 from flask.logging import default_handler
 
-from detector import repositorio
+from detector import acesso, repositorio
+from detector.acesso import auditar, utilizador_atual
 from detector.artefatos import carregar
 from detector.banco import criar_fabrica_sessoes, criar_motor, descrever, migrar, verificar_ligacao
 from detector.configuracao import Configuracao, ler_configuracao
@@ -34,7 +35,10 @@ RAIZ = Path(__file__).parent
 CAMPOS = ("cliente", "data_hora", "valor", "cidade", "pais", "categoria")
 MAX_LINHAS_TABELA = 500
 ANALISES_RECENTES = 10
-VERSAO = "1.1.0"
+VERSAO = "1.2.0"
+# Páginas que funcionam sem modelos treinados: contas, utilizadores e auditoria.
+SEM_MODELOS = frozenset({"static", "saude", "entrar", "entrar_post", "sair", "senha", "senha_post", "utilizadores",
+                         "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria"})
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
 INICIO_PERIGOSO = ("\t", "\r")
@@ -119,9 +123,11 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     def _inicio_pedido():
         g.inicio = time.perf_counter()
 
+    acesso.instalar(app, sessoes, registo, cfg.sessao_horas, cfg.producao)  # login, perfis, CSRF e auditoria
+
     @app.before_request
     def _exige_modelos():
-        if app.config["ARTEFATOS"] is None and request.endpoint not in ("static", "saude"):
+        if app.config["ARTEFATOS"] is None and request.endpoint not in SEM_MODELOS:
             return render_template("sem_modelos.html"), 503
         return None
 
@@ -129,7 +135,9 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     def _registar_pedido(resposta):
         if request.endpoint not in ("static", "saude"):
             ms = (time.perf_counter() - g.get("inicio", time.perf_counter())) * 1000
-            registo.info("%s %s %s %.0f ms", request.method, request.path, resposta.status_code, ms)
+            u = g.get("utilizador")
+            registo.info("%s %s %s %.0f ms [%s]", request.method, request.path, resposta.status_code, ms,
+                         u.nome_utilizador if u else "-")
         return resposta
 
     @app.errorhandler(500)
@@ -180,8 +188,22 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
                 mensagem = str(exc).removeprefix("Linha 2: ")
                 return _formulario(erro=mensagem[0].upper() + mensagem[1:], valores=valores, estado=400)
         resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes)
-        repositorio.guardar_analise(sessoes, resultado, origem, _modelo())
+        chave = repositorio.guardar_analise(sessoes, resultado, origem, _modelo(), utilizador_id=utilizador_atual().id)
+        final = resultado.iloc[-1]
+        auditar("testar_transacao", alvo=str(final["cliente"]),
+                detalhe=f"{f'exemplo {nome}' if nome else 'formulário'}; {len(resultado)} transação(ões); "
+                        f"{final['nivel']} (risco {int(final['risco'])}); análise {chave}")
         return _formulario(valores=valores, linhas=resultado.to_dict("records"))
+
+    def _ve_tudo() -> bool:
+        return utilizador_atual().pode("supervisor")
+
+    def _analise_visivel(chave):
+        """A análise, se existir e o utilizador a puder ver: o analista só vê as suas; os outros recebem 404."""
+        analise = repositorio.obter_analise(sessoes, chave)
+        if analise is None or not (_ve_tudo() or analise.utilizador_id == utilizador_atual().id):
+            abort(404)
+        return analise
 
     def _analisar(erro=None, estado=200, chave=None, so_alertas=False):
         analise = repositorio.obter_analise(sessoes, chave) if chave else None
@@ -190,10 +212,11 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             total, alertas = analise.total, analise.alertas
             visiveis = repositorio.obter_transacoes(sessoes, analise, so_alertas, MAX_LINHAS_TABELA)
             linhas = visiveis.to_dict("records")
-        recentes = repositorio.listar_analises(sessoes, "ficheiro", ANALISES_RECENTES)
+        recentes = repositorio.listar_analises(sessoes, "ficheiro", ANALISES_RECENTES,
+                                               None if _ve_tudo() else utilizador_atual().id)
         return render_template("analisar.html", erro=erro, chave=chave if analise is not None else None,
                                analise=analise, linhas=linhas, total=total, alertas=alertas, so_alertas=so_alertas,
-                               limite=MAX_LINHAS_TABELA, recentes=recentes), estado
+                               limite=MAX_LINHAS_TABELA, recentes=recentes, ve_tudo=_ve_tudo()), estado
 
     @app.get("/analisar")
     def analisar():
@@ -210,28 +233,34 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             return _analisar(erro=str(exc), estado=400)
         resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes)
         resultado = resultado.sort_values("risco", ascending=False, kind="stable").reset_index(drop=True)
-        chave = repositorio.guardar_analise(sessoes, resultado, "ficheiro", _modelo(), ficheiro.filename)
+        chave = repositorio.guardar_analise(sessoes, resultado, "ficheiro", _modelo(), ficheiro.filename,
+                                            utilizador_atual().id)
+        n_alertas = int((resultado["nivel"] != "Normal").sum())
         registo.info("Ficheiro '%s' analisado: %d transações, %d com alerta", ficheiro.filename,
-                     len(resultado), int((resultado["nivel"] != "Normal").sum()))
+                     len(resultado), n_alertas)
+        auditar("analisar_ficheiro", alvo=chave,
+                detalhe=f"{ficheiro.filename[:200]}: {len(resultado)} transações, {n_alertas} com alerta")
         return _analisar(chave=chave)
 
     @app.get("/analisar/<chave>.csv")
     def analisar_download(chave):
-        analise = repositorio.obter_analise(sessoes, chave)
-        if analise is None:
-            abort(404)
+        analise = _analise_visivel(chave)
         resultado = repositorio.obter_transacoes(sessoes, analise)
+        auditar("descarregar_analise", alvo=chave, detalhe=f"{analise.total} transações")
         return Response(_csv_excel(resultado), mimetype="text/csv",
                         headers={"Content-Disposition": 'attachment; filename="resultado.csv"'})
 
     @app.get("/analisar/<chave>")
     def analisar_ver(chave):
-        if repositorio.obter_analise(sessoes, chave) is None:
-            abort(404)
+        analise = _analise_visivel(chave)
+        auditar("consultar_analise", alvo=chave,
+                detalhe=f"{analise.nome_ficheiro or analise.origem}: {analise.alertas} alerta(s)")
         return _analisar(chave=chave, so_alertas=request.args.get("alertas") == "1")
 
     @app.errorhandler(413)
     def _grande_demais(_):
+        if utilizador_atual() is None:
+            return render_template("erro.html", titulo="Pedido grande demais", mensagem="O pedido passa de 5 MB."), 413
         return _analisar(erro="O ficheiro passa de 5 MB.", estado=413)
 
     @app.get("/perfil")
@@ -242,6 +271,8 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             return render_template("perfil.html", **dados)
         art = app.config["ARTEFATOS"]
         dados["perfil"] = perfil_cliente(art.historico, codigo)
+        auditar("consultar_perfil", alvo=codigo[:100],
+                detalhe=None if dados["perfil"] is not None else "cliente não encontrado")
         if dados["perfil"] is None:
             return render_template("perfil.html", **dados, erro="Cliente não encontrado."), 404
         teste = art.teste_avaliado

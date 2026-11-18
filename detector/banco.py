@@ -20,6 +20,44 @@ class Base(DeclarativeBase):
     pass
 
 
+PERFIS = ("analista", "supervisor", "administrador")  # do menor para o maior acesso
+
+
+class Utilizador(Base):
+    """Pessoa que entra no sistema. A senha fica guardada só como hash (scrypt, do werkzeug)."""
+    __tablename__ = "utilizadores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nome_utilizador: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    nome: Mapped[str] = mapped_column(String(120))
+    perfil: Mapped[str] = mapped_column(String(20))  # analista | supervisor | administrador
+    senha_hash: Mapped[str] = mapped_column(String(255))
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)  # depois de o administrador a redefinir
+    tentativas_falhadas: Mapped[int] = mapped_column(Integer, default=0)
+    bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime)
+    versao_sessao: Mapped[int] = mapped_column(Integer, default=1)  # muda para terminar as sessões abertas
+    criado_em: Mapped[datetime] = mapped_column(DateTime)
+    ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime)
+
+    def pode(self, perfil_minimo: str) -> bool:
+        return PERFIS.index(self.perfil) >= PERFIS.index(perfil_minimo)
+
+
+class EventoAuditoria(Base):
+    """Uma ação feita no sistema: quem, quando, o quê e sobre o quê. Nunca é alterado nem apagado."""
+    __tablename__ = "auditoria"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    momento: Mapped[datetime] = mapped_column(DateTime, index=True)
+    utilizador_id: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"), index=True)
+    nome_utilizador: Mapped[str] = mapped_column(String(50))  # cópia: o registo fica legível mesmo sem a conta
+    acao: Mapped[str] = mapped_column(String(40), index=True)
+    alvo: Mapped[str | None] = mapped_column(String(255), index=True)  # análise, cliente ou utilizador afetado
+    detalhe: Mapped[str | None] = mapped_column(Text)
+    ip: Mapped[str | None] = mapped_column(String(45))
+
+
 class Analise(Base):
     """Uma avaliação pedida na interface: um ficheiro CSV, o formulário ou um exemplo."""
     __tablename__ = "analises"
@@ -32,6 +70,10 @@ class Analise(Base):
     total: Mapped[int] = mapped_column(Integer)
     alertas: Mapped[int] = mapped_column(Integer)
     modelo: Mapped[str] = mapped_column(String(50))  # classificador escolhido no treino
+    utilizador_id: Mapped[int | None] = mapped_column(ForeignKey("utilizadores.id", ondelete="SET NULL"),
+                                                      index=True)  # quem pediu; vazio nas análises da Fase 1
+
+    utilizador: Mapped[Utilizador | None] = relationship(lazy="joined")
 
     transacoes: Mapped[list[TransacaoAvaliada]] = relationship(
         back_populates="analise", cascade="all, delete-orphan", order_by="TransacaoAvaliada.ordem")

@@ -27,6 +27,7 @@ class Configuracao:
     host: str
     porta: int
     threads: int
+    sessao_horas: int = 8
 
     @property
     def producao(self) -> bool:
@@ -49,6 +50,22 @@ def _inteiro(nome: str, padrao: int, minimo: int, maximo: int) -> int:
     return valor
 
 
+def _chave_local() -> str:
+    """Fora de produção, sem CHAVE_SECRETA: uma chave gerada uma vez e guardada em instancia/.
+
+    Tem de ser estável entre arranques, porque também assina os modelos treinados.
+    """
+    ficheiro = RAIZ / "instancia" / "chave_local.txt"
+    if ficheiro.exists():
+        chave = ficheiro.read_text(encoding="utf-8").strip()
+        if len(chave) >= 32:
+            return chave
+    ficheiro.parent.mkdir(parents=True, exist_ok=True)
+    chave = secrets.token_hex(32)
+    ficheiro.write_text(chave + "\n", encoding="utf-8")
+    return chave
+
+
 def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
     if ficheiro_env is not None and Path(ficheiro_env).exists():
         load_dotenv(ficheiro_env, override=False, encoding="utf-8")
@@ -61,7 +78,9 @@ def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
     if not chave:
         if ambiente == "producao":
             raise ValueError("Defina CHAVE_SECRETA no .env antes de iniciar em produção (o instalar.bat cria uma)")
-        chave = secrets.token_hex(32)  # temporária: muda a cada arranque, aceitável fora de produção
+        chave = _chave_local()
+    elif len(chave) < 32:
+        raise ValueError("CHAVE_SECRETA tem de ter pelo menos 32 caracteres (o instalar.bat gera uma com 64)")
 
     nivel = os.environ.get("NIVEL_LOG", "INFO").strip().upper()
     if nivel not in NIVEIS_LOG:
@@ -81,4 +100,5 @@ def ler_configuracao(ficheiro_env: Path | None = RAIZ / ".env") -> Configuracao:
         host=os.environ.get("HOST", "127.0.0.1").strip(),
         porta=_inteiro("PORTA", 5000, 1, 65535),
         threads=_inteiro("THREADS", 4, 1, 64),
+        sessao_horas=_inteiro("SESSAO_HORAS", 8, 1, 24 * 7),
     )

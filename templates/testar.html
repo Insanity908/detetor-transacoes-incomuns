@@ -6,11 +6,13 @@
     <h1 id="titulo-form">Testar transação</h1>
     <p class="ajuda">Escolha um exemplo ou descreva uma compra. O sistema compara-a com o comportamento habitual do cliente.</p>
     <form method="post" class="exemplos">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% for nome, descricao in exemplos %}
       <button type="submit" name="exemplo" value="{{ nome }}" class="secundario">{{ descricao }}</button>
       {% endfor %}
     </form>
     <form method="post" class="formulario">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Cliente
         <input name="cliente" list="lista-clientes" value="{{ valores.cliente or '' }}" required autocomplete="off"
                placeholder="C0001 ou um código novo">
