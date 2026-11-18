@@ -13,6 +13,7 @@ import pandas as pd
 INICIO = "2026-01-01"
 DIAS = 120
 PAIS_HABITUAL = "MZ"
+N_CLIENTES_TREINO = 300  # clientes do treino; os clientes do banco de demonstração são os mesmos
 CIDADES = ("MAPUTO", "MATOLA", "BEIRA", "NAMPULA", "QUELIMANE", "TETE")
 PESO_CIDADES = (0.35, 0.2, 0.15, 0.12, 0.1, 0.08)
 CATEGORIAS = ("MERCEARIA", "COMBUSTIVEL", "RESTAURANTE", "FARMACIA", "RECARGA_TELEMOVEL", "TRANSPORTE",

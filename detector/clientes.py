@@ -183,6 +183,18 @@ APELIDOS = ("Sitoe", "Macamo", "Chissano", "Mondlane", "Machava", "Tembe", "Coss
 RUAS = ("Av. 24 de Julho", "Av. Eduardo Mondlane", "Rua da Resistência", "Av. Samora Machel", "Rua do Bagamoyo")
 
 
+def _documento(rng: random.Random, usados: set[tuple[str, str]]) -> tuple[str, str]:
+    """Sorteia um NUIT ou BI válido que ainda não foi usado."""
+    while True:
+        if rng.random() < 0.5:
+            tipo, numero = "NUIT", f"{rng.randint(0, 999_999_999):09d}"
+        else:
+            tipo, numero = "BI", f"{rng.randint(0, 999_999_999_999):012d}" + rng.choice("ABCDEFGHJKLMNPQ")
+        if (tipo, numero) not in usados:
+            usados.add((tipo, numero))
+            return tipo, numero
+
+
 def criar_sinteticos(sessoes, perfis: list[dict], semente: int = 42) -> int:
     """Cria a ficha, a conta e o saldo inicial dos clientes do gerador (mesmo código, ex. C0001).
 
@@ -194,14 +206,7 @@ def criar_sinteticos(sessoes, perfis: list[dict], semente: int = 42) -> int:
     for perfil in perfis:  # gera todas as fichas, mesmo as já criadas, para a sequência não depender do que existe
         nome = f"{rng.choice(NOMES)} {rng.choice(APELIDOS)} {rng.choice(APELIDOS)}"
         nascimento = date(rng.randint(1960, 2000), rng.randint(1, 12), rng.randint(1, 28))
-        while True:
-            if rng.random() < 0.5:
-                tipo, numero = "NUIT", f"{rng.randint(0, 999_999_999):09d}"
-            else:
-                tipo, numero = "BI", f"{rng.randint(0, 999_999_999_999):012d}" + rng.choice("ABCDEFGHJKLMNPQ")
-            if (tipo, numero) not in documentos:
-                documentos.add((tipo, numero))
-                break
+        tipo, numero = _documento(rng, documentos)
         telefone = f"8{rng.randint(2, 7)}{rng.randint(0, 9_999_999):07d}"
         morada = f"{rng.choice(RUAS)} {rng.randint(1, 999)}"
         dados = validar(dict(nome=nome, data_nascimento=nascimento.isoformat(), tipo_documento=tipo,
@@ -211,13 +216,25 @@ def criar_sinteticos(sessoes, perfis: list[dict], semente: int = 42) -> int:
     criados = 0
     for perfil, dados in fichas:
         codigo = perfil["cliente"]
-        if obter_por_codigo(sessoes, codigo) is not None:
-            continue
-        try:
-            cliente = criar(sessoes, dados, "sistema", sintetico=True, codigo=codigo)
-        except ValueError:  # documento igual ao de uma ficha real: salta
-            continue
         saldo = round(perfil["tipico"] * perfil["taxa"] * 90 * 100)
+        existente = obter_por_codigo(sessoes, codigo)
+        if existente is not None:
+            # reparação: ficha criada mas depósito inicial em falta (falha entre os dois passos)
+            if (existente.sintetico and saldo > 0 and existente.conta.saldo == 0
+                    and not contas_bancarias.extrato(sessoes, existente.conta.id, 1)):
+                contas_bancarias.depositar(sessoes, existente.conta.id, saldo, "balcao", "sistema", None,
+                                           "Saldo inicial")
+            continue
+        for _ in range(50):  # documento repetido (ficha real ou outro sintético): sorteia outro
+            try:
+                cliente = criar(sessoes, dados, "sistema", sintetico=True, codigo=codigo)
+                break
+            except ValueError as exc:
+                if "Já existe um cliente com" not in str(exc):
+                    raise
+                dados.tipo_documento, dados.numero_documento = _documento(rng, documentos)
+        else:
+            raise ValueError(f"Não foi possível gerar um documento único para {codigo}.")
         if saldo > 0:
             contas_bancarias.depositar(sessoes, cliente.conta.id, saldo, "balcao", "sistema", None, "Saldo inicial")
         criados += 1

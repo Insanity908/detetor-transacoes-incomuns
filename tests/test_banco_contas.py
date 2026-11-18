@@ -126,3 +126,28 @@ def test_cliente_novo_continua_a_numeracao(sessoes):
 def test_verificar_saldos_pelo_gerir(pasta_pequena, capsys):
     import gerir
     assert gerir.main(["verificar-saldos"]) == 0
+
+
+def test_sinteticos_reparam_deposito_em_falta(sessoes, monkeypatch):
+    perfis = _perfis(3)
+    original = contas_bancarias.depositar
+    def falha(*a, **k):
+        raise RuntimeError("falha simulada")
+    monkeypatch.setattr(contas_bancarias, "depositar", falha)
+    with pytest.raises(RuntimeError):
+        clientes.criar_sinteticos(sessoes, perfis)
+    assert clientes.obter_por_codigo(sessoes, "C0001").conta.saldo == 0
+    monkeypatch.setattr(contas_bancarias, "depositar", original)
+    assert clientes.criar_sinteticos(sessoes, perfis) == 2  # C0001 reparado (não conta como criado), C0002 e C0003 novos
+    assert all(clientes.obter_por_codigo(sessoes, f"C000{i}").conta.saldo > 0 for i in (1, 2, 3))
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_sinteticos_sorteiam_outro_documento_se_repetido(sessoes, monkeypatch):
+    _novo(sessoes, numero_documento="111111111")  # ficha real C0001 com o documento que o sintético vai tentar
+    respostas = iter([("NUIT", "111111111"), ("NUIT", "222222222")])
+    monkeypatch.setattr(clientes, "_documento", lambda rng, usados: next(respostas))
+    perfil = dict(_perfis(2)[1], cliente="C0050")
+    assert clientes.criar_sinteticos(sessoes, [perfil]) == 1
+    novo = clientes.obter_por_codigo(sessoes, "C0050")
+    assert novo.numero_documento == "222222222" and novo.conta.saldo > 0

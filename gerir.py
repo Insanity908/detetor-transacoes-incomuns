@@ -65,9 +65,11 @@ def _sessoes():
     return criar_fabrica_sessoes(criar_motor(url))
 
 
-def criar_sinteticos(n: int = 300) -> None:
+def criar_sinteticos(n: int | None = None) -> None:
     """Cria os clientes do banco que correspondem aos do treino (idempotente)."""
     from detector import clientes, simulacao
+    from detector.gerador import N_CLIENTES_TREINO
+    n = N_CLIENTES_TREINO if n is None else n
     criados = clientes.criar_sinteticos(_sessoes(), simulacao.clientes_do_treino(n))
     print(f"Clientes de demonstração: {criados} criados." if criados else "Clientes de demonstração já existem.")
 

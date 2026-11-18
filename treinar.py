@@ -25,7 +25,7 @@ from sklearn.model_selection import train_test_split  # noqa: E402
 from detector.artefatos import Artefatos, gravar  # noqa: E402
 from detector.avaliacao import NOMES_PERIODO, dividir_periodos, melhor_limiar, metricas  # noqa: E402
 from detector.explicacao import formatar_decimal  # noqa: E402
-from detector.gerador import NOMES_TIPO_FRAUDE, TIPOS_FRAUDE, gerar_transacoes  # noqa: E402
+from detector.gerador import N_CLIENTES_TREINO, NOMES_TIPO_FRAUDE, TIPOS_FRAUDE, gerar_transacoes  # noqa: E402
 from detector.modelos import MARGEM_EMPATE, NOMES, ORDEM_SIMPLICIDADE, criar_classificadores, treinar  # noqa: E402
 from detector.perfis import FEATURES, calcular_features  # noqa: E402
 from detector.servico import montar_resultado  # noqa: E402
@@ -249,7 +249,7 @@ def _relatorio(res: dict, graficos: str) -> str:
 
 
 def executar(pasta_modelos: Path = Path("modelos"), pasta_dados: Path = Path("data"),
-             relatorio: Path | None = Path("RELATORIO.md"), n_clientes: int = 300, dias: int = 120,
+             relatorio: Path | None = Path("RELATORIO.md"), n_clientes: int = N_CLIENTES_TREINO, dias: int = 120,
              semente: int = 42) -> dict:
     inicio = time.monotonic()
     pasta_modelos, pasta_dados = Path(pasta_modelos), Path(pasta_dados)
