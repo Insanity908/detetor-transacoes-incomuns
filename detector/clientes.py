@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from detector.banco import Cliente, ContaBancaria
@@ -134,16 +135,19 @@ def obter_por_codigo(sessoes, codigo: str) -> Cliente | None:
         return _carregar(s, s.scalar(select(Cliente).where(Cliente.codigo == codigo.strip().upper())))
 
 
+def _normalizar(texto: str) -> str:
+    """Minúsculas e sem acentos, para comparar nomes."""
+    base = unicodedata.normalize("NFD", texto.casefold())
+    return "".join(c for c in base if not unicodedata.combining(c))
+
+
 def pesquisar(sessoes, texto: str, limite: int = 50) -> list[Cliente]:
-    """Procura por parte do nome, do código ou do número de documento."""
-    texto = texto.strip()
-    consulta = select(Cliente).order_by(Cliente.codigo).limit(limite)
-    if texto:
-        padrao = f"%{texto}%"
-        consulta = consulta.where(or_(Cliente.nome.ilike(padrao), Cliente.codigo.ilike(padrao),
-                                      Cliente.numero_documento.ilike(padrao)))
+    """Procura por parte do nome (sem distinguir maiúsculas nem acentos), do código ou do documento."""
+    procura = _normalizar(texto.strip())
     with sessoes() as s:
-        encontrados = list(s.scalars(consulta))
+        todos = list(s.scalars(select(Cliente).order_by(Cliente.codigo)))
+        encontrados = [c for c in todos if not procura or procura in _normalizar(c.nome)
+                       or procura in c.codigo.casefold() or procura in c.numero_documento.casefold()][:limite]
         for c in encontrados:
             _ = c.conta
         s.expunge_all()

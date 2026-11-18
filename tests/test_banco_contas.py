@@ -28,10 +28,23 @@ def test_para_centavos_aceita(texto, esperado):
     assert dinheiro.para_centavos(texto) == esperado
 
 
-@pytest.mark.parametrize("texto", ["0", "-10", "abc", "10,555", "", "100000001"])
+@pytest.mark.parametrize("texto", ["0", "-10", "abc", "10,555", "", "100000001", "1.2.3", "١٢٣", "1 23 456"])
 def test_para_centavos_recusa(texto):
     with pytest.raises(ValueError):
         dinheiro.para_centavos(texto)
+
+
+def test_para_centavos_milhares_validos():
+    assert dinheiro.para_centavos("1.234.567") == 123456700
+    assert dinheiro.para_centavos("1 234 567,5") == 123456750
+
+
+def test_pesquisar_ignora_maiusculas_acentos_e_escapa_curingas(sessoes):
+    c = _novo(sessoes, nome="João Macamo")
+    for texto in ("joao", "JOÃO", "macamo"):
+        assert [x.id for x in clientes.pesquisar(sessoes, texto)] == [c.id]
+    assert clientes.pesquisar(sessoes, "%") == []
+    assert clientes.pesquisar(sessoes, "_") == []
 
 
 def test_criar_cliente_abre_conta_com_saldo_zero(sessoes):

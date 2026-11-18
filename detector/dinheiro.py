@@ -14,14 +14,21 @@ def para_centavos(texto: str | int | float) -> int:
     if isinstance(texto, (int, float)):
         bruto = str(texto)
     else:
-        bruto = re.sub(r"\s+", "", str(texto))
+        bruto = str(texto).strip()
+        if re.search(r"[0-9]\s+[0-9]", bruto):  # espaços como separador de milhares: grupos de 3
+            inteira = re.split(r"[,.]", bruto, maxsplit=1)[0] if "," in bruto else bruto
+            if not re.fullmatch(r"[0-9]{1,3}(\s[0-9]{3})+", inteira.strip()):
+                raise ValueError("Valor inválido: use apenas algarismos, por exemplo 1 234,50.")
+        bruto = re.sub(r"\s+", "", bruto)
     if not bruto:
         raise ValueError("Indique um valor.")
     if "," in bruto:
         bruto = bruto.replace(".", "").replace(",", ".")  # vírgula decimal, ponto de milhares
     elif bruto.count(".") > 1:
+        if not re.fullmatch(r"-?[0-9]{1,3}(\.[0-9]{3})+", bruto):
+            raise ValueError("Valor inválido: use apenas algarismos, por exemplo 1 234,50.")
         bruto = bruto.replace(".", "")
-    if not re.fullmatch(r"-?\d+(\.\d+)?", bruto):
+    if not re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", bruto):
         raise ValueError("Valor inválido: use apenas algarismos, por exemplo 1 234,50.")
     try:
         valor = Decimal(bruto)
