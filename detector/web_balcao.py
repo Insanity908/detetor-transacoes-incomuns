@@ -1,17 +1,21 @@
 """Páginas do balcão: lista e pesquisa de clientes, abertura de ficha e conta, edição, depósitos e bloqueio."""
 from __future__ import annotations
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from datetime import datetime
+
+from flask import Flask, abort, current_app, flash, redirect, render_template, request, url_for
 from sqlalchemy.orm import sessionmaker
 
 from . import acesso, clientes, contas_bancarias
+from .autorizacao import PedidoDebito, autorizar
 from .acesso import auditar, exige_area, utilizador_atual
 from .dinheiro import de_centavos, para_centavos
 from .explicacao import formatar_decimal
-from .gerador import CIDADES
+from .gerador import CATEGORIA_LEVANTAMENTO, CIDADES
 
 ENDPOINTS = frozenset({"balcao_clientes", "balcao_cliente_novo", "balcao_cliente_novo_post", "balcao_cliente",
-                       "balcao_cliente_editar", "balcao_cliente_deposito", "balcao_cliente_bloquear"})
+                       "balcao_cliente_editar", "balcao_cliente_deposito", "balcao_cliente_bloquear",
+                       "balcao_cliente_levantamento"})
 acesso.ENDPOINTS_BALCAO.update(ENDPOINTS)
 NOMES_TIPO = {"deposito": "Depósito", "levantamento": "Levantamento", "compra": "Compra",
               "transferencia_enviada": "Transferência enviada", "transferencia_recebida": "Transferência recebida"}
@@ -97,6 +101,34 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
             return _ficha(c, str(exc), 400)
         auditar("deposito", alvo=c.codigo, detalhe=f"{valor} cêntimos" + (f"; {descricao}" if descricao else ""))
         flash("Depósito registado.", "sucesso")
+        return redirect(url_for("balcao_cliente", cliente_id=c.id))
+
+    @app.post("/balcao/clientes/<int:cliente_id>/levantamento")
+    @exige_area("balcao")
+    def balcao_cliente_levantamento(cliente_id):
+        c = _cliente(cliente_id)
+        artefatos = current_app.config["ARTEFATOS"]
+        if artefatos is None:
+            return _ficha(c, "O detetor ainda não está pronto: não é possível fazer levantamentos.", 503)
+        try:
+            valor = para_centavos(request.form.get("valor", ""))
+        except ValueError as exc:
+            return _ficha(c, str(exc), 400)
+        cidade = request.form.get("cidade", "").strip().upper()
+        if cidade not in CIDADES:
+            cidade = c.cidade
+        u = utilizador_atual()
+        pedido = PedidoDebito(conta_id=c.conta.id, tipo="levantamento", valor=valor, momento=datetime.now(),
+                              cidade=cidade, pais="MZ", categoria=CATEGORIA_LEVANTAMENTO, canal="balcao",
+                              por=u.nome_utilizador)
+        [d] = autorizar(sessoes, artefatos, [pedido], current_app.config["CORTES"], "banco")
+        auditar("levantamento", alvo=c.codigo, detalhe=f"{valor} cêntimos; {d.estado}" + (f"; {d.motivo}" if d.motivo else ""))
+        if d.estado == "autorizado":
+            flash("Levantamento autorizado. Entregue o dinheiro.", "sucesso")
+        elif d.estado == "retido":
+            flash("Em verificação. Não entregue o dinheiro até a equipa de fraude decidir.", "erro")
+        else:
+            flash(d.motivo or "Levantamento recusado.", "erro")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))
 
     @app.post("/balcao/clientes/<int:cliente_id>/bloquear")

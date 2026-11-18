@@ -17,6 +17,18 @@
   <label>Descrição (opcional) <input name="descricao" maxlength="140" autocomplete="off"></label>
   <button type="submit" class="principal">Depositar</button>
 </form>
+
+<h2 class="separado">Levantamento</h2>
+<form method="post" action="/balcao/clientes/{{ c.id }}/levantamento" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="500,00"></label>
+  <label>Cidade
+    <select name="cidade">
+      {% for x in cidades %}<option value="{{ x }}" {% if c.cidade == x %}selected{% endif %}>{{ x|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="principal">Levantar</button>
+</form>
 <form method="post" action="/balcao/clientes/{{ c.id }}/bloquear" class="envio">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if conta.estado == 'bloqueada' %}

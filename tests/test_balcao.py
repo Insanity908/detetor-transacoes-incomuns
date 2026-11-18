@@ -172,3 +172,67 @@ def test_balcao_funciona_sem_modelos(tmp_path):
 
 def test_senha_do_utilizador_criado_pre_seleciona_analista(cliente):
     assert 'value="analista" selected' in cliente.get("/utilizadores").get_data(as_text=True)
+
+
+# ------------------------------------------------------------ levantamento ao balcão
+def _forcar_nivel(monkeypatch, nivel, risco):
+    from detector import autorizacao
+
+    def falso(artefatos, df, historico_extra=None, cortes=None):
+        r = df.copy().reset_index(drop=True)
+        r["risco"], r["anomalia"], r["nivel"] = risco, 10.0, nivel
+        r["motivos"] = [["teste"]] * len(r)
+        r["historico_curto"] = False
+        return r
+    monkeypatch.setattr(autorizacao, "avaliar_transacoes", falso)
+
+
+def _com_saldo(cliente_balcao, saldo="1 000,00"):
+    _novo(cliente_balcao)
+    cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": saldo})
+
+
+def _levantar(cliente_balcao, valor="100,00", **extra):
+    return cliente_balcao.post("/balcao/clientes/1/levantamento", data={"valor": valor, **extra},
+                               follow_redirects=True)
+
+
+def test_levantamento_autorizado(app_balcao, cliente_balcao, monkeypatch):
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    _com_saldo(cliente_balcao)
+    pagina = _levantar(cliente_balcao).get_data(as_text=True)
+    assert "Levantamento autorizado. Entregue o dinheiro." in pagina
+    assert "900,00 MT" in pagina and "Levantamento" in pagina
+    assert ("levantamento", "C0001") in _acoes(app_balcao)
+
+
+def test_levantamento_retido_manda_nao_entregar(app_balcao, cliente_balcao, monkeypatch):
+    _forcar_nivel(monkeypatch, "Alto risco", 90.0)
+    _com_saldo(cliente_balcao)
+    pagina = _levantar(cliente_balcao).get_data(as_text=True)
+    assert "Em verificação." in pagina and "Não entregue o dinheiro" in pagina
+    assert "Retido" in pagina and ("levantamento", "C0001") in _acoes(app_balcao)
+
+
+def test_levantamento_recusado_mostra_o_motivo(app_balcao, cliente_balcao, monkeypatch):
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    _com_saldo(cliente_balcao, "50,00")
+    pagina = _levantar(cliente_balcao, "100,00", cidade="BEIRA").get_data(as_text=True)
+    assert "Saldo insuficiente." in pagina
+    assert ("levantamento", "C0001") in _acoes(app_balcao)
+
+
+def test_levantamento_invalido_da_400(cliente_balcao, monkeypatch):
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    _com_saldo(cliente_balcao)
+    for valor in ("abc", "-5", "0", ""):
+        assert cliente_balcao.post("/balcao/clientes/1/levantamento", data={"valor": valor}).status_code == 400
+
+
+def test_levantamento_sem_modelos_da_503(tmp_path):
+    app = criar_app(tmp_path / "vazia")
+    c = criar_cliente(app, "balcao")
+    c.post("/balcao/clientes/novo", data=DADOS)
+    r = c.post("/balcao/clientes/1/levantamento", data={"valor": "10"})
+    assert r.status_code == 503
+    assert "O detetor ainda não está pronto: não é possível fazer levantamentos." in r.get_data(as_text=True)
