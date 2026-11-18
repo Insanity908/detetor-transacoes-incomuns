@@ -38,14 +38,20 @@ def _agora() -> datetime:
 
 
 # ------------------------------------------------------------ criação
-def criar_para_analise(sessao: Session, analise_id: int, momento: datetime) -> int:
-    """Cria um alerta novo por cada transação com alerta desta análise. Corre dentro da gravação da análise."""
-    ids = sessao.scalars(select(TransacaoAvaliada.id)
-                         .where(TransacaoAvaliada.analise_id == analise_id, TransacaoAvaliada.nivel != "Normal")
-                         .order_by(TransacaoAvaliada.ordem)).all()
-    if ids:
-        sessao.execute(insert(Alerta), [{"transacao_id": i, "criado_em": momento, "estado": "novo"} for i in ids])
-    return len(ids)
+def criar_para_analise(sessao: Session, analise_id: int, momento: datetime,
+                      estados: dict[int, str] | None = None) -> int:
+    """Cria um alerta por cada transação com alerta desta análise. Corre dentro da gravação da análise.
+
+    Os alertas nascem "novo", salvo `estados` (ordem da transação -> estado), p. ex. "recusado_auto".
+    """
+    estados = estados or {}
+    linhas = sessao.execute(select(TransacaoAvaliada.id, TransacaoAvaliada.ordem)
+                            .where(TransacaoAvaliada.analise_id == analise_id, TransacaoAvaliada.nivel != "Normal")
+                            .order_by(TransacaoAvaliada.ordem)).all()
+    if linhas:
+        sessao.execute(insert(Alerta), [{"transacao_id": i, "criado_em": momento, "estado": estados.get(o, "novo")}
+                                        for i, o in linhas])
+    return len(linhas)
 
 
 # ------------------------------------------------------------ quem pode o quê

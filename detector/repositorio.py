@@ -7,28 +7,18 @@ from datetime import datetime
 
 import pandas as pd
 from sqlalchemy import func, insert, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from .alertas import criar_para_analise
 from .banco import Analise, TransacaoAvaliada
 
 COLUNAS = ("id_transacao", "cliente", "data_hora", "valor", "cidade", "pais", "categoria",
            "risco", "anomalia", "nivel", "motivos", "historico_curto")
-ORIGENS = ("ficheiro", "formulario", "exemplo", "api")
+ORIGENS = ("ficheiro", "formulario", "exemplo", "api", "banco")
 
 
-def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str, modelo: str,
-                    nome_ficheiro: str | None = None, utilizador_id: int | None = None,
-                    gerar_alertas: bool = False, chave_api_id: int | None = None,
-                    versao_modelo: int | None = None) -> str:
-    """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface.
-
-    Com gerar_alertas, cada transação com alerta entra na fila de alertas, na mesma transação do banco.
-    """
-    if origem not in ORIGENS:
-        raise ValueError(f"Origem desconhecida: {origem}")
-    chave = secrets.token_urlsafe(16)
-    linhas = [
+def _linhas(resultado: pd.DataFrame) -> list[dict]:
+    return [
         {
             "ordem": i,
             "id_transacao": str(r["id_transacao"]),
@@ -49,17 +39,43 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
         }
         for i, r in enumerate(resultado.to_dict("records"))
     ]
+
+
+def gravar_analise(sessao: Session, resultado: pd.DataFrame, origem: str, modelo: str,
+                   nome_ficheiro: str | None = None, utilizador_id: int | None = None,
+                   chave_api_id: int | None = None, versao_modelo: int | None = None) -> Analise:
+    """Grava a análise e as suas transações numa sessão aberta (sem commit; os alertas são de quem chama)."""
+    if origem not in ORIGENS:
+        raise ValueError(f"Origem desconhecida: {origem}")
+    linhas = _linhas(resultado)
+    analise = Analise(chave=secrets.token_urlsafe(16), origem=origem,
+                      nome_ficheiro=(nome_ficheiro or None) and nome_ficheiro[:255],
+                      criada_em=datetime.now().replace(microsecond=0), total=len(linhas),
+                      alertas=sum(x["nivel"] != "Normal" for x in linhas), modelo=modelo,
+                      utilizador_id=utilizador_id, chave_api_id=chave_api_id, versao_modelo=versao_modelo)
+    sessao.add(analise)
+    sessao.flush()
+    if linhas:
+        sessao.execute(insert(TransacaoAvaliada), [x | {"analise_id": analise.id} for x in linhas])
+    return analise
+
+
+def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str, modelo: str,
+                    nome_ficheiro: str | None = None, utilizador_id: int | None = None,
+                    gerar_alertas: bool = False, chave_api_id: int | None = None,
+                    versao_modelo: int | None = None) -> str:
+    """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface.
+
+    Com gerar_alertas, cada transação com alerta entra na fila de alertas, na mesma transação do banco.
+    """
+    if origem not in ORIGENS:
+        raise ValueError(f"Origem desconhecida: {origem}")
     with sessoes.begin() as sessao:
-        analise = Analise(chave=chave, origem=origem, nome_ficheiro=(nome_ficheiro or None) and nome_ficheiro[:255],
-                          criada_em=datetime.now().replace(microsecond=0), total=len(linhas),
-                          alertas=sum(x["nivel"] != "Normal" for x in linhas), modelo=modelo,
-                          utilizador_id=utilizador_id, chave_api_id=chave_api_id, versao_modelo=versao_modelo)
-        sessao.add(analise)
-        sessao.flush()
-        if linhas:
-            sessao.execute(insert(TransacaoAvaliada), [x | {"analise_id": analise.id} for x in linhas])
+        analise = gravar_analise(sessao, resultado, origem, modelo, nome_ficheiro, utilizador_id,
+                                 chave_api_id, versao_modelo)
         if gerar_alertas:
             criar_para_analise(sessao, analise.id, analise.criada_em)
+        chave = analise.chave
     return chave
 
 
@@ -114,7 +130,7 @@ def historico_api(sessoes: sessionmaker, clientes: set[str], desde: datetime) ->
     consulta = (select(*(getattr(TransacaoAvaliada, c) for c in colunas), Alerta.estado)
                 .join(Analise, Analise.id == TransacaoAvaliada.analise_id)
                 .outerjoin(Alerta, Alerta.transacao_id == TransacaoAvaliada.id)
-                .where(Analise.origem == "api", TransacaoAvaliada.cliente.in_(sorted(clientes)),
+                .where(Analise.origem.in_(("api", "banco")), TransacaoAvaliada.cliente.in_(sorted(clientes)),
                        TransacaoAvaliada.data_hora >= desde)
                 .order_by(TransacaoAvaliada.data_hora, TransacaoAvaliada.id))
     with sessoes() as sessao:
