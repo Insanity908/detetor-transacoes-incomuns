@@ -43,7 +43,9 @@ def motivos(transacao: dict, features: dict, perfil: dict | None) -> list[str]:
     if features["cidade_nova"]:
         lista.append(f"Primeira compra deste cliente em {transacao['cidade'].title()}")
     if features["categoria_nova"]:
-        lista.append(f"Primeira compra deste cliente na categoria {nome_categoria(transacao['categoria'])}")
+        neutro = {"TRANSFERENCIA": "Primeira transferência deste cliente",
+                  "LEVANTAMENTO": "Primeiro levantamento deste cliente"}.get(transacao["categoria"])
+        lista.append(neutro or f"Primeira compra deste cliente na categoria {nome_categoria(transacao['categoria'])}")
     if features["hora_incomum"] >= LIMIAR_HORA:
         lista.append(f"Compra às {int(features['hora'])}h; este cliente quase nunca compra a esta hora")
     if features["compras_ultima_hora"] >= LIMIAR_RAJADA:

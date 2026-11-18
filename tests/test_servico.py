@@ -251,3 +251,9 @@ def test_habitual_do_motivo_usa_so_o_passado(artefatos_pequenos):
     r = avaliar_transacoes(artefatos_pequenos, pd.DataFrame([_linha(data_hora=quando, valor=compras.valor.median() * 50)]))
     esperado = perfil_cliente(hist[hist.data_hora < quando], "C0001")["valor_mediana"]
     assert f"(habitual: {formatar_mt(esperado)})" in r.motivos.iloc[0][0]
+
+
+def test_motivo_de_categoria_nova_em_transferencia_e_levantamento():
+    f = SEM_DESVIO | {"categoria_nova": 1}
+    assert motivos(TRANSACAO | {"categoria": "TRANSFERENCIA"}, f, PERFIL) == ["Primeira transferência deste cliente"]
+    assert motivos(TRANSACAO | {"categoria": "LEVANTAMENTO"}, f, PERFIL) == ["Primeiro levantamento deste cliente"]
