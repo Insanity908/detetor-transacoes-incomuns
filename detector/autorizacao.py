@@ -67,9 +67,7 @@ def _invalido(s: Session, p: PedidoDebito) -> str | None:
         return "Conta não encontrada."
     if conta.estado == "bloqueada":
         return "A conta está bloqueada."
-    if p.tipo == "transferencia_enviada":
-        if p.contraparte_id is None:
-            return "A transferência precisa de uma conta de destino."
+    if p.tipo == "transferencia_enviada" and p.contraparte_id is not None:  # sem contraparte: saída para fora
         if p.contraparte_id == p.conta_id:
             return "A conta de destino não pode ser a própria conta."
         destino = s.get(ContaBancaria, p.contraparte_id)
@@ -159,7 +157,7 @@ def autorizar(sessoes: sessionmaker, artefatos, pedidos: list[PedidoDebito], cor
             if float(linha["risco"]) >= cortes.recusa:
                 continue  # recusado pelo risco: não gasta saldo
             disponivel[p.conta_id] -= p.valor
-            if p.tipo == "transferencia_enviada" and linha["nivel"] != "Alto risco":
+            if p.tipo == "transferencia_enviada" and p.contraparte_id is not None and linha["nivel"] != "Alto risco":
                 disponivel[p.contraparte_id] = livre(p.contraparte_id) + p.valor
 
         if passam:

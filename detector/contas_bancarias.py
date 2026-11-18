@@ -62,8 +62,6 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
         raise ValueError(f"Canal inválido: {canal}.")
     if estado not in ESTADOS_DEBITO:
         raise ValueError(f"Estado inválido para um débito: {estado}.")
-    if tipo == "transferencia_enviada" and contraparte_id is None:
-        raise ValueError("A transferência precisa de uma conta de destino.")
     destino = s.get(ContaBancaria, contraparte_id) if contraparte_id is not None else None
     if contraparte_id is not None and destino is None:
         raise ValueError("Conta de destino não encontrada.")
@@ -72,7 +70,7 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
     if estado != "recusado":
         if conta.estado == "bloqueada":
             estado, motivo = "recusado", "A conta está bloqueada."
-        elif tipo == "transferencia_enviada" and destino.estado == "bloqueada":
+        elif tipo == "transferencia_enviada" and destino is not None and destino.estado == "bloqueada":
             estado, motivo = "recusado", "A conta de destino está bloqueada."
     if estado != "recusado":
         if estado == "autorizado":
@@ -93,7 +91,7 @@ def debitar(s: Session, conta: ContaBancaria, tipo: str, valor: int, canal: str,
                           saldo_apos=saldo_apos, criado_por=por)
     s.add(movimento)
     s.flush()
-    if estado == "autorizado" and tipo == "transferencia_enviada":
+    if estado == "autorizado" and tipo == "transferencia_enviada" and destino is not None:  # sem destino: a saída é para fora do banco
         creditar(s, contraparte_id, valor, "transferencia_recebida", canal, por, momento, descricao, conta.id)
     return movimento
 
@@ -120,14 +118,14 @@ def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimen
         destino = s.get(ContaBancaria, movimento.contraparte_id) if movimento.contraparte_id else None
         if origem_estado == "bloqueada":
             movimento.motivo = "A conta foi bloqueada entretanto."
-        elif movimento.tipo == "transferencia_enviada" and (destino is None or destino.estado == "bloqueada"):
+        elif movimento.tipo == "transferencia_enviada" and movimento.contraparte_id is not None and (destino is None or destino.estado == "bloqueada"):
             movimento.motivo = "A conta de destino foi bloqueada entretanto."
         else:
             s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)
                       .values(saldo=ContaBancaria.saldo - valor))
             movimento.estado = "autorizado"
             movimento.saldo_apos = _saldo(s, movimento.conta_id)
-            if movimento.tipo == "transferencia_enviada":
+            if movimento.tipo == "transferencia_enviada" and movimento.contraparte_id is not None:
                 creditar(s, movimento.contraparte_id, valor, "transferencia_recebida", movimento.canal, por,
                          movimento.momento, movimento.descricao, movimento.conta_id)
     s.flush()

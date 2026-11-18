@@ -44,15 +44,44 @@ def especificacao(servidor: str = "") -> dict:
         "type": "object",
         "properties": {
             "id_transacao": {"type": "string"},
-            "risco": {"type": "number", "description": "0 a 100, do classificador. 50 é o limite de alerta."},
-            "anomalia": {"type": "number", "description": "0 a 100, do Isolation Forest."},
-            "nivel": {"type": "string", "enum": ["Normal", "Atenção", "Alto risco"]},
-            "alerta": {"type": "boolean"},
+            "risco": {"type": "number", "nullable": True,
+                      "description": "0 a 100, do classificador. 50 é o limite de alerta. Nulo quando o banco "
+                                     "recusou o pedido antes da avaliação (saldo insuficiente, conta bloqueada)."},
+            "anomalia": {"type": "number", "nullable": True, "description": "0 a 100, do Isolation Forest. "
+                                                                           "Nulo como o risco."},
+            "nivel": {"type": "string", "nullable": True, "enum": ["Normal", "Atenção", "Alto risco", None],
+                      "description": "Nulo quando o banco recusou o pedido antes da avaliação."},
+            "alerta": {"type": "boolean", "description": "Falso quando não houve avaliação."},
             "motivos": {"type": "array", "items": {"type": "string"}},
             "alerta_id": {"type": "integer", "nullable": True, "description": "Número na fila de alertas."},
             "estado_alerta": {"type": "string", "nullable": True,
                               "enum": ["novo", "em_analise", "fraude", "falso_alarme", None]},
             "duplicada": {"type": "boolean", "description": "O id já tinha sido recebido antes."},
+            "movimento": {
+                "type": "object", "nullable": True,
+                "description": "O que aconteceu ao dinheiro, para clientes com conta bancária no sistema "
+                               "(nulo para os restantes). Uma transação repetida devolve o movimento já gravado, "
+                               "sem debitar outra vez. A categoria TRANSFERENCIA é uma saída para fora do banco.",
+                "properties": {
+                    "estado": {"type": "string", "enum": ["autorizado", "retido", "recusado"]},
+                    "motivo": {"type": "string", "nullable": True,
+                               "description": "Porque foi recusado (por exemplo, saldo insuficiente)."}},
+            },
+        },
+    }
+    deposito = {
+        "type": "object", "additionalProperties": False,
+        "required": ["id_deposito", "cliente", "valor", "data_hora"],
+        "properties": {
+            "id_deposito": {"type": "string", "pattern": "^[A-Za-z0-9._:\\-]{1,100}$", "example": "DEP-000123",
+                            "description": "Identificador único do depósito. Reenviar o mesmo id não soma outra "
+                                           "vez ao saldo."},
+            "cliente": {"type": "string", "maxLength": 100, "example": "C0001",
+                        "description": "Código do cliente; tem de ter conta bancária."},
+            "valor": {"type": "number", "exclusiveMinimum": 0, "example": 2500.5,
+                      "description": "Em meticais, com no máximo duas casas decimais."},
+            "data_hora": {"type": "string", "format": "date-time", "example": "2026-05-01T14:30:00"},
+            "descricao": {"type": "string", "maxLength": 140},
         },
     }
     auth = [{"chave": []}]
@@ -75,6 +104,16 @@ def especificacao(servidor: str = "") -> dict:
                          "properties": {"transacoes": {"type": "array", "minItems": 1, "maxItems": MAX_LOTE,
                                                        "items": {"$ref": "#/components/schemas/Transacao"}}}},
                 "Resultado": resultado,
+                "Deposito": deposito,
+                "LoteDepositos": {"type": "object", "additionalProperties": False, "required": ["depositos"],
+                                  "properties": {"depositos": {"type": "array", "minItems": 1, "maxItems": MAX_LOTE,
+                                                               "items": {"$ref": "#/components/schemas/Deposito"}}}},
+                "RespostaDepositos": {"type": "object", "properties": {"resultados": {
+                    "type": "array", "items": {"type": "object", "properties": {
+                        "id_deposito": {"type": "string"},
+                        "estado": {"type": "string", "enum": ["autorizado", "recusado"]},
+                        "motivo": {"type": "string", "description": "Só quando recusado (conta bloqueada)."},
+                        "saldo": {"type": "number", "description": "Saldo da conta depois do depósito, em meticais."}}}}}},
                 "Resposta": {"type": "object", "properties": {
                     "recebidas": {"type": "integer"}, "avaliadas": {"type": "integer"},
                     "duplicadas": {"type": "integer"}, "alertas": {"type": "integer"},
@@ -100,6 +139,24 @@ def especificacao(servidor: str = "") -> dict:
                     "400": _erro("O corpo não é JSON válido"),
                     "401": _erro("Chave em falta, inválida ou revogada"),
                     "413": _erro("Pedido maior que o permitido"),
+                    "415": _erro("O corpo não é application/json"),
+                    "422": _erro("Dados inválidos (lista em 'erros')"),
+                    "429": _erro("Limite de pedidos por minuto da chave atingido (ver Retry-After)"),
+                    "503": _erro("Modelos não treinados"),
+                }}},
+            "/api/v1/depositos": {"post": {
+                "summary": "Depositar dinheiro em contas do banco",
+                "description": f"Envie {{\"depositos\": [...]}} com até {MAX_LOTE}. Idempotente por id_deposito. "
+                               "Se algum for inválido (por exemplo, cliente sem conta), nada é gravado e a resposta "
+                               "lista todos os problemas. Uma conta bloqueada recusa o depósito sem invalidar o lote.",
+                "security": auth,
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                    "$ref": "#/components/schemas/LoteDepositos"}}}},
+                "responses": {
+                    "200": {"description": "Processados", "content": {"application/json": {
+                        "schema": {"$ref": "#/components/schemas/RespostaDepositos"}}}},
+                    "400": _erro("O corpo não é JSON válido"),
+                    "401": _erro("Chave em falta, inválida ou revogada"),
                     "415": _erro("O corpo não é application/json"),
                     "422": _erro("Dados inválidos (lista em 'erros')"),
                     "429": _erro("Limite de pedidos por minuto da chave atingido (ver Retry-After)"),

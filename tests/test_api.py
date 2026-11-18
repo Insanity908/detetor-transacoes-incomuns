@@ -460,3 +460,145 @@ def test_cliente_da_api_desiste_sem_servidor():
 def test_simulador_sem_chave_explica(capsys, monkeypatch):
     monkeypatch.delenv("DETETOR_CHAVE_API", raising=False)
     assert simulador.main([]) == 2 and "Falta a chave" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------ banco: débitos e depósitos
+def _cliente_banco(app, codigo="B0001", saldo=0, n=1):
+    from detector import clientes, contas_bancarias
+    form = dict(nome=f"Cliente Banco {n}", data_nascimento="1990-05-10", tipo_documento="NUIT",
+                numero_documento=f"20000000{n}", telefone="841234567", email=None, cidade="MAPUTO", morada="Rua 1")
+    c = clientes.criar(_sessoes(app), clientes.validar(form), "teste", codigo=codigo)
+    if saldo:
+        contas_bancarias.depositar(_sessoes(app), c.conta.id, saldo, "balcao", "teste")
+    return c.conta.id
+
+
+def _saldo(app, conta_id):
+    from detector.banco import ContaBancaria
+    with _sessoes(app)() as s:
+        return s.get(ContaBancaria, conta_id).saldo
+
+
+def test_cliente_com_conta_e_saldo_e_autorizado_e_debitado(app, chave):
+    conta = _cliente_banco(app, saldo=100_000)
+    r = _api(app, chave, json=_transacao(cliente="B0001", valor=150.0))
+    assert r.status_code == 200, r.json
+    res = r.json["resultados"][0]
+    assert res["movimento"]["estado"] in ("autorizado", "retido", "recusado")
+    if res["movimento"]["estado"] == "autorizado":
+        assert _saldo(app, conta) == 100_000 - 15_000
+    assert res["nivel"] is not None and res["duplicada"] is False
+
+
+def test_cliente_com_conta_sem_saldo_e_recusado(app, chave):
+    conta = _cliente_banco(app, saldo=1_000)
+    r = _api(app, chave, json=_transacao(cliente="B0001", valor=150.0))
+    res = r.json["resultados"][0]
+    assert res["movimento"] == {"estado": "recusado", "motivo": "Saldo insuficiente."}
+    assert res["nivel"] is None and res["risco"] is None and res["alerta"] is False and res["motivos"] == []
+    assert _saldo(app, conta) == 1_000
+
+
+def test_cliente_sem_conta_nao_tem_movimento(app, chave):
+    r = _api(app, chave, json=_transacao())
+    res = r.json["resultados"][0]
+    assert res["movimento"] is None and res["nivel"] is not None and res["duplicada"] is False
+
+
+def test_lote_misto_mantem_a_ordem(app, chave):
+    _cliente_banco(app, saldo=1_000)
+    lote = [_transacao(1), _transacao(2, cliente="B0001", valor=150.0), _transacao(3)]
+    r = _api(app, chave, json={"transacoes": lote})
+    res = r.json["resultados"]
+    assert [x["id_transacao"] for x in res] == ["T-1", "T-2", "T-3"]
+    assert res[0]["movimento"] is None and res[2]["movimento"] is None
+    assert res[1]["movimento"]["estado"] == "recusado"
+    assert r.json["recebidas"] == 3 and r.json["avaliadas"] == 3
+
+
+def test_repetida_de_conta_nao_debita_duas_vezes(app, chave):
+    conta = _cliente_banco(app, saldo=1_000)
+    _api(app, chave, json=_transacao(cliente="B0001", valor=150.0))  # recusada por saldo
+    r = _api(app, chave, json=_transacao(cliente="B0001", valor=150.0))
+    res = r.json["resultados"][0]
+    assert res["duplicada"] is True and res["movimento"]["estado"] == "recusado"
+    assert r.json["duplicadas"] == 1 and _saldo(app, conta) == 1_000
+    from detector.banco import Movimento
+    assert _contar(app, Movimento, Movimento.id_transacao == "T-1") == 1
+
+
+def test_repetida_autorizada_devolve_o_mesmo_estado(app, chave):
+    conta = _cliente_banco(app, saldo=10_000_000)
+    r1 = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0)).json["resultados"][0]
+    saldo = _saldo(app, conta)
+    r2 = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0)).json["resultados"][0]
+    assert r2["duplicada"] is True and r2["movimento"] == r1["movimento"] and _saldo(app, conta) == saldo
+
+
+def test_valor_com_tres_casas_para_conta_e_invalido(app, chave):
+    conta = _cliente_banco(app, saldo=100_000)
+    r = _api(app, chave, json=_transacao(cliente="B0001", valor=10.123))
+    assert r.status_code == 422 and r.json["erros"][0]["campo"] == "valor" and r.json["erros"][0]["indice"] == 0
+    assert _saldo(app, conta) == 100_000
+
+
+def test_transferencia_de_simulacao_sai_para_fora(app, chave):
+    from detector.banco import Movimento
+    _cliente_banco(app, saldo=10_000_000)
+    r = _api(app, chave, json=_transacao(cliente="B0001", valor=10.0, categoria="TRANSFERENCIA",
+                                         simulacao={"fraude": False}))
+    assert r.status_code == 200
+    with _sessoes(app)() as s:
+        m = s.scalars(select(Movimento).where(Movimento.id_transacao == "T-1")).one()
+    assert m.tipo == "transferencia_enviada" and m.contraparte_id is None and m.canal == "simulador"
+
+
+def test_canal_api_sem_simulacao_e_uso_registado(app, chave):
+    from detector.banco import Movimento
+    _cliente_banco(app, saldo=10_000_000)
+    _api(app, chave, json={"transacoes": [_transacao(1, cliente="B0001", valor=10.0), _transacao(2)]})
+    with _sessoes(app)() as s:
+        m = s.scalars(select(Movimento).where(Movimento.id_transacao == "T-1")).one()
+        assert m.canal == "api" and m.tipo == "compra" and m.criado_por == "Testes"
+        assert s.scalar(select(ChaveApi.transacoes).where(ChaveApi.nome == "Testes")) == 2
+
+
+def _deposito(i=1, **extra):
+    return {"id_deposito": f"D-{i}", "cliente": "B0001", "valor": 250.5, "data_hora": "2026-05-01T14:30:00",
+            "descricao": "Salário"} | extra
+
+
+def test_deposito_soma_ao_saldo_e_e_idempotente(app, chave):
+    conta = _cliente_banco(app, saldo=1_000)
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito()]})
+    assert r.status_code == 200, r.json
+    assert r.json["resultados"] == [{"id_deposito": "D-1", "estado": "autorizado", "saldo": 26_050 / 100}]
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito()]})
+    assert r.status_code == 200 and r.json["resultados"][0]["saldo"] == 260.5
+    assert _saldo(app, conta) == 26_050
+
+
+def test_deposito_cliente_sem_conta_ou_valor_invalido_nao_grava_nada(app, chave):
+    conta = _cliente_banco(app, saldo=1_000)
+    lote = [_deposito(1), _deposito(2, cliente="C0001"), _deposito(3, valor=1.234), _deposito(4, valor=0)]
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": lote})
+    assert r.status_code == 422
+    assert sorted((e["indice"], e["campo"]) for e in r.json["erros"]) == [(1, "cliente"), (2, "valor"), (3, "valor")]
+    assert _saldo(app, conta) == 1_000
+
+
+def test_deposito_exige_chave_e_conta_bloqueada_e_recusada(app, chave):
+    from detector import contas_bancarias
+    conta = _cliente_banco(app, saldo=1_000)
+    assert _api(app, None, caminho="/api/v1/depositos", json={"depositos": [_deposito()]}).status_code == 401
+    contas_bancarias.bloquear(_sessoes(app), conta, True, "teste")
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito()]})
+    assert r.status_code == 200 and r.json["resultados"][0]["estado"] == "recusado"
+    assert r.json["resultados"][0]["motivo"] and _saldo(app, conta) == 1_000
+
+
+def test_id_de_deposito_nao_colide_com_id_de_transacao(app, chave):
+    conta = _cliente_banco(app, saldo=10_000_000)
+    _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="X-1"))
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="X-1")]})
+    assert r.status_code == 200 and r.json["resultados"][0]["estado"] == "autorizado"

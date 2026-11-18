@@ -12,9 +12,14 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 from flask import Blueprint, Flask, current_app, g, jsonify, request
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from . import chaves_api, repositorio
+from . import chaves_api, dinheiro, repositorio
+from .autorizacao import Decisao, PedidoDebito, autorizar
+from .banco import Cliente, ContaBancaria, Movimento
+from .contas_bancarias import creditar
+from .gerador import CATEGORIA_TRANSFERENCIA
 from .simulacao import TIPOS_SIMULACAO
 from .servico import avaliar_transacoes
 
@@ -184,6 +189,42 @@ def _autenticar():
     return None
 
 
+def _contas_dos_clientes(sessoes, codigos: set[str]) -> dict[str, int]:
+    """O id da conta bancária de cada código de cliente que a tem (os restantes não aparecem)."""
+    with sessoes() as s:
+        return dict(s.execute(select(Cliente.codigo, ContaBancaria.id).join(ContaBancaria)
+                              .where(Cliente.codigo.in_(sorted(codigos)))).all())
+
+
+def _centimos(valor, indice: int, erros: list) -> int | None:
+    """O valor em MT como cêntimos inteiros; acrescenta o erro (e devolve None) se não for válido."""
+    try:
+        return dinheiro.para_centavos(str(valor))
+    except ValueError as exc:
+        erros.append({"indice": indice, "campo": "valor", "erro": str(exc)})
+        return None
+
+
+def _resultado_banco(decisao: Decisao, gravado: dict | None, id_transacao: str, duplicada: bool) -> dict:
+    """Resultado de uma transação de cliente com conta: o do detetor (se houve avaliação) e o movimento."""
+    movimento = {"estado": decisao.estado, "motivo": decisao.motivo}
+    if gravado is not None:
+        return _resultado(gravado, duplicada) | {"movimento": movimento}
+    return {"id_transacao": id_transacao, "risco": None, "anomalia": None, "nivel": None, "alerta": False,
+            "motivos": [], "alerta_id": None, "estado_alerta": None, "duplicada": duplicada,
+            "movimento": movimento}
+
+
+def _movimentos_anteriores(sessoes, contas: dict[str, int]) -> dict[str, Decisao]:
+    """Movimentos de saída já gravados para estes ids (id -> conta), para nunca debitar duas vezes."""
+    with sessoes() as s:
+        linhas = s.execute(select(Movimento.id_transacao, Movimento.conta_id, Movimento.id, Movimento.estado,
+                                  Movimento.motivo)
+                           .where(Movimento.id_transacao.in_(sorted(contas)), Movimento.tipo != "deposito")
+                           .order_by(Movimento.id)).all()
+    return {i: Decisao(m, e, mo, None, None, None) for i, c, m, e, mo in reversed(linhas) if contas[i] == c}
+
+
 @bp.post("/transacoes")
 def receber_transacoes():
     sessoes: sessionmaker = current_app.config["SESSOES"]
@@ -198,8 +239,20 @@ def receber_transacoes():
     except ErroValidacao as exc:
         return erro(422, "dados_invalidos", "Há transações com dados inválidos; nada foi gravado.", erros=exc.erros)
 
-    anteriores = repositorio.resultados_api(sessoes, list(transacoes["id_transacao"]))
-    novas = transacoes[~transacoes["id_transacao"].isin(anteriores)].reset_index(drop=True)
+    # Clientes com conta bancária seguem o banco (cada débito é autorizado pelo detetor); os restantes, o caminho simples.
+    codigos = transacoes["cliente"].str.upper()
+    contas = _contas_dos_clientes(sessoes, set(codigos))
+    conta_de = codigos.map(contas)
+    do_banco = conta_de.notna()
+    erros, centimos = [], {}
+    for i in transacoes.index[do_banco]:
+        centimos[i] = _centimos(transacoes.at[i, "valor"], int(i), erros)
+    if erros:
+        return erro(422, "dados_invalidos", "Há transações com dados inválidos; nada foi gravado.", erros=erros)
+
+    simples = transacoes[~do_banco]
+    anteriores = repositorio.resultados_api(sessoes, list(simples["id_transacao"]))
+    novas = simples[~simples["id_transacao"].isin(anteriores)].reset_index(drop=True)
     if len(novas):
         clientes = set(novas["cliente"].str.strip().str.upper())
         desde = novas["data_hora"].min().to_pydatetime() - timedelta(days=DIAS_HISTORICO)
@@ -209,15 +262,149 @@ def receber_transacoes():
         repositorio.guardar_analise(sessoes, resultado, "api", artefatos.detector.escolhido,
                                     gerar_alertas=True, chave_api_id=g.chave_api.id, versao_modelo=artefatos.versao)
     gravados = repositorio.resultados_api(sessoes, list(novas["id_transacao"]))
-    resultados = [_resultado(anteriores[i], True) if i in anteriores else _resultado(gravados[i], False)
-                  for i in transacoes["id_transacao"]]
-    chaves_api.registar_uso(sessoes, g.chave_api.id, len(novas))
+
+    # Transações do banco: as repetidas devolvem o movimento já gravado; as novas passam por autorizar().
+    conta_por_id = {transacoes.at[i, "id_transacao"]: int(conta_de[i]) for i in transacoes.index[do_banco]}
+    vistos = _movimentos_anteriores(sessoes, conta_por_id) if conta_por_id else {}
+    pedidos = []
+    for i in transacoes.index[do_banco]:
+        linha = transacoes.loc[i]
+        if linha["id_transacao"] in vistos:
+            continue
+        simulada = not pd.isna(linha["fraude_simulada"])
+        pedidos.append(PedidoDebito(
+            conta_id=conta_por_id[linha["id_transacao"]],
+            tipo="transferencia_enviada" if linha["categoria"].upper() == CATEGORIA_TRANSFERENCIA else "compra",
+            valor=centimos[i], momento=linha["data_hora"].to_pydatetime(), cidade=linha["cidade"],
+            pais=linha["pais"], categoria=linha["categoria"], canal="simulador" if simulada else "api",
+            por=g.chave_api.nome, id_transacao=linha["id_transacao"],
+            fraude_simulada=bool(linha["fraude_simulada"]) if simulada else None,
+            tipo_fraude_simulada=linha["tipo_fraude_simulada"] if simulada and linha["tipo_fraude_simulada"] else None))
+    decisoes = {}
+    if pedidos:
+        decididas = autorizar(sessoes, artefatos, pedidos, current_app.config.get("CORTES"), "api",
+                              chave_api_id=g.chave_api.id)
+        decisoes = {p.id_transacao: d for p, d in zip(pedidos, decididas)}
+    avaliadas = repositorio.resultados_api(
+        sessoes, [i for i, d in decisoes.items() if d.nivel is not None] + list(vistos))
+
+    resultados = []
+    for id_transacao in transacoes["id_transacao"]:
+        if id_transacao in conta_por_id:
+            repetida = id_transacao in vistos
+            resultados.append(_resultado_banco(vistos[id_transacao] if repetida else decisoes[id_transacao],
+                                               avaliadas.get(id_transacao), id_transacao, repetida))
+        elif id_transacao in anteriores:
+            resultados.append(_resultado(anteriores[id_transacao], True) | {"movimento": None})
+        else:
+            resultados.append(_resultado(gravados[id_transacao], False) | {"movimento": None})
+    n_novas, n_duplicadas = len(novas) + len(pedidos), len(anteriores) + len(vistos)
+    chaves_api.registar_uso(sessoes, g.chave_api.id, n_novas)
     n_alertas = sum(r["alerta"] and not r["duplicada"] for r in resultados)
-    if len(novas):
+    if n_novas:
         registo.info("API (%s): %d transação(ões) avaliada(s), %d com alerta, %d repetida(s)",
-                     g.chave_api.nome, len(novas), n_alertas, len(anteriores))
-    return jsonify({"recebidas": len(transacoes), "avaliadas": len(novas), "duplicadas": len(anteriores),
+                     g.chave_api.nome, n_novas, n_alertas, n_duplicadas)
+    return jsonify({"recebidas": len(transacoes), "avaliadas": n_novas, "duplicadas": n_duplicadas,
                     "alertas": n_alertas, "resultados": resultados})
+
+
+DEPOSITO_CAMPOS = ("id_deposito", "cliente", "valor", "data_hora")
+DEPOSITO_OPCIONAIS = ("descricao",)
+
+
+def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[dict]:
+    """Valida o lote de depósitos (com a conta de cada cliente); levanta ErroValidacao com todos os problemas."""
+    agora = agora or datetime.now()
+    if not isinstance(corpo, dict):
+        raise ErroValidacao([{"campo": "corpo", "erro": "tem de ser um objeto JSON"}])
+    extra = set(corpo) - {"depositos"}
+    if extra:
+        raise ErroValidacao([{"campo": c, "erro": "campo desconhecido"} for c in sorted(extra)])
+    lista = corpo.get("depositos")
+    if not isinstance(lista, list) or not 1 <= len(lista) <= MAX_LOTE:
+        raise ErroValidacao([{"campo": "depositos", "erro": f"tem de ser uma lista com 1 a {MAX_LOTE} depósitos"}])
+    erros, linhas, vistos = [], [], set()
+    codigos = {i["cliente"].strip().upper() for i in lista
+               if isinstance(i, dict) and isinstance(i.get("cliente"), str)}
+    contas = _contas_dos_clientes(sessoes, codigos)
+    for i, item in enumerate(lista):
+        if not isinstance(item, dict):
+            erros.append({"indice": i, "campo": "deposito", "erro": "tem de ser um objeto"})
+            continue
+        for campo in sorted(set(item) - set(DEPOSITO_CAMPOS) - set(DEPOSITO_OPCIONAIS)):
+            erros.append({"indice": i, "campo": campo, "erro": "campo desconhecido"})
+        for campo in DEPOSITO_CAMPOS:
+            if campo not in item:
+                erros.append({"indice": i, "campo": campo, "erro": "obrigatório"})
+        if any(c not in item for c in DEPOSITO_CAMPOS):
+            continue
+        n_erros = len(erros)
+        id_deposito = item["id_deposito"]
+        if not isinstance(id_deposito, str) or not PADRAO_ID.match(id_deposito):
+            erros.append({"indice": i, "campo": "id_deposito",
+                          "erro": "1 a 100 caracteres: letras, números, '.', '_', ':' ou '-'"})
+        elif id_deposito in vistos:
+            erros.append({"indice": i, "campo": "id_deposito", "erro": "repetido neste pedido"})
+        vistos.add(id_deposito if isinstance(id_deposito, str) else None)
+        cliente = _texto(item["cliente"], "cliente", 100, erros, i)
+        conta_id = None
+        if cliente is not None:
+            conta_id = contas.get(cliente.upper())
+            if conta_id is None:
+                erros.append({"indice": i, "campo": "cliente", "erro": "cliente sem conta bancária"})
+        valor = item["valor"]
+        centimos = None
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor):
+            erros.append({"indice": i, "campo": "valor", "erro": "número maior que zero"})
+        else:
+            centimos = _centimos(valor, i, erros)
+        quando = _data_hora(item["data_hora"], erros, i, agora)
+        descricao = item.get("descricao")
+        if descricao is not None:
+            descricao = _texto(descricao, "descricao", 140, erros, i)
+        if len(erros) == n_erros:
+            linhas.append({"id_deposito": id_deposito, "conta_id": conta_id, "valor": centimos,
+                           "momento": quando, "descricao": descricao})
+    if erros:
+        raise ErroValidacao(erros)
+    return linhas
+
+
+@bp.post("/depositos")
+def receber_depositos():
+    sessoes: sessionmaker = current_app.config["SESSOES"]
+    if not request.is_json:
+        return erro(415, "tipo_invalido", "Envie o corpo em JSON (Content-Type: application/json).")
+    corpo = request.get_json(silent=True)
+    if corpo is None:
+        return erro(400, "json_invalido", "O corpo não é JSON válido.")
+    try:
+        depositos = _validar_depositos(corpo, sessoes)
+    except ErroValidacao as exc:
+        return erro(422, "dados_invalidos", "Há depósitos com dados inválidos; nada foi gravado.", erros=exc.erros)
+    resultados, novos = [], 0
+    with sessoes.begin() as s:
+        for d in depositos:
+            conta = s.get(ContaBancaria, d["conta_id"])
+            # O id do depósito só se compara com depósitos: nunca colide com o id de uma transação.
+            anterior = s.scalar(select(Movimento).where(Movimento.id_transacao == d["id_deposito"],
+                                                        Movimento.conta_id == conta.id, Movimento.tipo == "deposito"))
+            if anterior is not None:
+                resultados.append({"id_deposito": d["id_deposito"], "estado": anterior.estado,
+                                   "saldo": conta.saldo / 100})
+            elif conta.estado == "bloqueada":
+                resultados.append({"id_deposito": d["id_deposito"], "estado": "recusado",
+                                   "motivo": "A conta está bloqueada e não pode receber dinheiro.",
+                                   "saldo": conta.saldo / 100})
+            else:
+                m = creditar(s, conta.id, d["valor"], "deposito", "api", g.chave_api.nome, d["momento"],
+                             d["descricao"])
+                m.id_transacao = d["id_deposito"]
+                novos += 1
+                resultados.append({"id_deposito": d["id_deposito"], "estado": m.estado, "saldo": m.saldo_apos / 100})
+    chaves_api.registar_uso(sessoes, g.chave_api.id, novos)
+    registo.info("API (%s): %d depósito(s) novo(s) em %d recebido(s)", g.chave_api.nome, novos, len(depositos))
+    return jsonify({"resultados": resultados})
 
 
 @bp.get("/transacoes/<id_transacao>")
