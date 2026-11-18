@@ -352,6 +352,7 @@ def test_configuracao_de_email_invalida(monkeypatch, nome, valor):
 # ------------------------------------------------------------ migração
 def test_migracao_0003_poe_os_alertas_antigos_na_fila(ambiente_de_teste):
     from alembic import command
+    from sqlalchemy import text
     from detector.banco import configuracao_alembic, criar_motor, migrar
     url = "sqlite:///" + (ambiente_de_teste / "antigo.db").as_posix()
     command.upgrade(configuracao_alembic(url), "0002")
