@@ -221,7 +221,7 @@ def _movimentos_anteriores(sessoes, contas: dict[str, int]) -> dict[str, Decisao
     with sessoes() as s:
         linhas = s.execute(select(Movimento.id_transacao, Movimento.conta_id, Movimento.id, Movimento.estado,
                                   Movimento.motivo)
-                           .where(Movimento.id_transacao.in_(sorted(contas)), ~Movimento.id_transacao.like(PREFIXO_DEPOSITO + "%"))
+                           .where(Movimento.id_transacao.in_(sorted(contas)), Movimento.tipo != "deposito")
                            .order_by(Movimento.id)).all()
     return {i: Decisao(m, e, mo, None, None, None) for i, c, m, e, mo in reversed(linhas) if contas[i] == c}
 
@@ -324,8 +324,8 @@ def receber_transacoes():
 
 DEPOSITO_CAMPOS = ("id_deposito", "cliente", "valor", "data_hora")
 DEPOSITO_OPCIONAIS = ("descricao",)
-PREFIXO_DEPOSITO = "DEP:"
-PADRAO_ID_DEPOSITO = re.compile(r"^[A-Za-z0-9._:\-]{1,96}$")  # + o prefixo cabe nos 100 do id
+PREFIXO_DEPOSITO = "#"  # "#" não é aceite nos ids de transação, por isso as duas chaves nunca colidem
+PADRAO_ID_DEPOSITO = re.compile(r"^[A-Za-z0-9._:\-]{1,99}$")  # + o prefixo cabe nos 100 do id
 
 
 def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[dict]:
@@ -358,7 +358,7 @@ def _validar_depositos(corpo, sessoes, agora: datetime | None = None) -> list[di
         id_deposito = item["id_deposito"]
         if not isinstance(id_deposito, str) or not PADRAO_ID_DEPOSITO.match(id_deposito):
             erros.append({"indice": i, "campo": "id_deposito",
-                          "erro": "1 a 96 caracteres: letras, números, '.', '_', ':' ou '-'"})
+                          "erro": "1 a 99 caracteres: letras, números, '.', '_', ':' ou '-'"})
         elif id_deposito in vistos:
             erros.append({"indice": i, "campo": "id_deposito", "erro": "repetido neste pedido"})
         vistos.add(id_deposito if isinstance(id_deposito, str) else None)
@@ -392,10 +392,11 @@ def _gravar_depositos(sessoes, depositos: list[dict]) -> tuple[list[dict], int]:
     with sessoes.begin() as s:
         for d in depositos:
             conta = s.get(ContaBancaria, d["conta_id"])
-            # O id fica guardado com o prefixo DEP: para partilhar o índice único sem colidir com ids de transações.
+            # O id fica guardado com o prefixo "#" para partilhar o índice único sem colidir com ids de transações.
             chave = PREFIXO_DEPOSITO + d["id_deposito"]
             anterior = s.scalar(select(Movimento).where(Movimento.id_transacao == chave,
-                                                        Movimento.conta_id == conta.id))
+                                                        Movimento.conta_id == conta.id,
+                                                        Movimento.tipo == "deposito"))
             if anterior is not None:
                 resultados.append({"id_deposito": d["id_deposito"], "estado": anterior.estado,
                                    "saldo": conta.saldo / 100})

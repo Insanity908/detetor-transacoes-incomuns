@@ -683,3 +683,29 @@ def test_depositos_sobrepostos_com_o_mesmo_id_so_creditam_uma_vez(app, chave, mo
     assert r.status_code == 200 and r.json["resultados"][0]["saldo"] == 26_050 / 100
     assert _saldo(app, conta) == 26_050
     _saldos_certos(app)
+
+
+def test_deposito_e_transacao_com_ids_parecidos_nao_colidem(app, chave, monkeypatch):
+    """Transação "DEP:1" e depósito "1" na mesma conta: ambos valem, nos dois sentidos, sem erro 500."""
+    _forcar(monkeypatch)
+    conta = _cliente_banco(app, saldo=100_000)
+    r = _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="DEP:1"))
+    assert r.json["resultados"][0]["movimento"]["estado"] == "autorizado" and _saldo(app, conta) == 99_000
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="1", valor=5.0)]})
+    assert r.status_code == 200 and r.json["resultados"][0]["saldo"] == 995.0 and _saldo(app, conta) == 99_500
+    r = _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="DEP:1"))
+    assert r.json["resultados"][0]["duplicada"] is True and _saldo(app, conta) == 99_500
+    _saldos_certos(app)
+
+
+def test_transacao_com_id_de_deposito_depois_do_deposito(app, chave, monkeypatch):
+    _forcar(monkeypatch)
+    conta = _cliente_banco(app, saldo=100_000)
+    _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="DEP:x", valor=5.0)]})
+    for esperada in (False, True):  # a repetição da transação "dep:x" é vista como repetida
+        r = _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="dep:x"))
+        assert r.status_code == 200 and r.json["resultados"][0]["duplicada"] is esperada
+    assert _saldo(app, conta) == 100_000 + 500 - 1_000
+    r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="#x")]})
+    assert r.status_code == 422
+    _saldos_certos(app)
