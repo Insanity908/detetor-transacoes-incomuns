@@ -40,7 +40,8 @@ ACOES = {
     "conta_aberta": "Abriu conta bancária",
     "cliente_alterado": "Alterou ficha de cliente",
     "deposito": "Registou depósito",
-    "conta_desbloqueada": "Desbloqueou conta bancária",
+    "conta_bancaria_bloqueada": "Bloqueou conta bancária",
+    "conta_bancaria_desbloqueada": "Desbloqueou conta bancária",
 }
 POR_PAGINA = 50
 

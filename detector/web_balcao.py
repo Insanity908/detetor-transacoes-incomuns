@@ -105,6 +105,6 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         c = _cliente(cliente_id)
         bloquear = request.form.get("bloquear") == "1"
         contas_bancarias.bloquear(sessoes, c.conta.id, bloquear, utilizador_atual().nome_utilizador)
-        auditar("conta_bloqueada" if bloquear else "conta_desbloqueada", alvo=c.codigo, detalhe=c.conta.numero)
+        auditar("conta_bancaria_bloqueada" if bloquear else "conta_bancaria_desbloqueada", alvo=c.codigo, detalhe=c.conta.numero)
         flash("Conta bloqueada." if bloquear else "Conta desbloqueada.", "sucesso")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))

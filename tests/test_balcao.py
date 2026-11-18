@@ -147,7 +147,9 @@ def test_bloquear_e_desbloquear(app_balcao, cliente_balcao):
     assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 400
     cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "0"})
     assert cliente_balcao.post("/balcao/clientes/1/deposito", data={"valor": "10"}).status_code == 302
-    assert ("conta_bloqueada", "C0001") in _acoes(app_balcao)
+    assert ("conta_bancaria_bloqueada", "C0001") in _acoes(app_balcao)
+    cliente_balcao.post("/balcao/clientes/1/bloquear", data={"bloquear": "0"})
+    assert ("conta_bancaria_desbloqueada", "C0001") in _acoes(app_balcao)
 
 
 def test_cliente_inexistente_da_404(cliente_balcao):
