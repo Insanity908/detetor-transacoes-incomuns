@@ -67,7 +67,7 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         auditar("consultar_alerta", alvo=str(a.id),
                 detalhe=f"{alertas.NOMES_ESTADO[a.estado]}; cliente {a.transacao.cliente}")
         return render_template(
-            "alerta.html", a=a, t=a.transacao, historico=alertas.historico(sessoes, a.id),
+            "alerta.html", a=a, banco=alertas.dados_banco(sessoes, a), t=a.transacao, historico=alertas.historico(sessoes, a.id),
             outros=alertas.outros_do_cliente(sessoes, a, u), pode_trabalhar=alertas.pode_trabalhar(a, u),
             ve_tudo=alertas.ve_tudo(u), abertos=ESTADOS_ABERTOS, rascunho=rascunho,
             responsaveis=alertas.responsaveis_possiveis(sessoes) if alertas.ve_tudo(u) else [])
@@ -94,8 +94,11 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
                 flash("O alerta voltou à fila como novo.", "sucesso")
             elif acao == "decidir":
                 decisao = request.form.get("decisao", "")
-                alertas.decidir(sessoes, a.id, decisao, texto, u)
+                movimento = alertas.decidir(sessoes, a.id, decisao, texto, u)
                 auditar("decidir_alerta", alvo=str(a.id), detalhe=alertas.NOMES_ESTADO.get(decisao))
+                if movimento is not None:
+                    auditar("movimento_executado" if movimento.estado == "autorizado" else "movimento_cancelado",
+                            alvo=str(movimento.id), detalhe=f"alerta {a.id}; {movimento.motivo or 'executado'}")
                 flash(f"Alerta encerrado: {alertas.NOMES_ESTADO[decisao].lower()}.", "sucesso")
             elif acao == "reabrir":
                 alertas.reabrir(sessoes, a.id, texto, u)

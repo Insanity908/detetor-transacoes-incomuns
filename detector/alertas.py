@@ -17,7 +17,8 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from .banco import ESTADOS_ABERTOS, Alerta, EventoAlerta, TransacaoAvaliada, Utilizador
+from . import contas_bancarias
+from .banco import ESTADOS_ABERTOS, Alerta, ContaBancaria, EventoAlerta, Movimento, TransacaoAvaliada, Utilizador
 
 NOMES_ESTADO = {"novo": "Novo", "em_analise": "Em análise", "fraude": "Fraude confirmada",
                 "falso_alarme": "Falso alarme", "recusado_auto": "Recusado automaticamente"}
@@ -127,6 +128,18 @@ def obter(sessoes: sessionmaker, alerta_id: int) -> Alerta | None:
         return sessao.get(Alerta, alerta_id)
 
 
+def dados_banco(sessoes: sessionmaker, alerta: Alerta) -> dict | None:
+    """Titular, conta e movimento ligados à transação do alerta (só nos alertas nascidos no banco)."""
+    with sessoes() as sessao:
+        movimento = contas_bancarias.movimento_da_transacao(sessao, alerta.transacao_id)
+        if movimento is None:
+            return None
+        conta = sessao.get(ContaBancaria, movimento.conta_id)
+        return {"titular": conta.cliente.nome, "codigo": conta.cliente.codigo, "conta": conta.numero,
+                "disponivel": conta.disponivel, "tipo": movimento.tipo, "valor": movimento.valor,
+                "estado": movimento.estado, "motivo": movimento.motivo}
+
+
 def historico(sessoes: sessionmaker, alerta_id: int) -> list[EventoAlerta]:
     with sessoes() as sessao:
         return list(sessao.scalars(select(EventoAlerta).where(EventoAlerta.alerta_id == alerta_id)
@@ -218,7 +231,11 @@ def devolver(sessoes: sessionmaker, alerta_id: int, u: Utilizador, texto: str | 
         _evento(sessao, alerta_id, u, "atribuicao", anterior, None)
 
 
-def decidir(sessoes: sessionmaker, alerta_id: int, decisao: str, texto: str, u: Utilizador) -> None:
+def decidir(sessoes: sessionmaker, alerta_id: int, decisao: str, texto: str, u: Utilizador) -> Movimento | None:
+    """Encerra o alerta e, se a transação tinha um movimento retido, liquida-o na mesma transação.
+
+    Devolve o movimento liquidado (desligado da sessão) ou None. Se a liquidação falhar, nada fica gravado.
+    """
     if decisao not in DECISOES:
         raise ValueError("Decisão desconhecida.")
     texto = _nota(texto, obrigatoria=True)
@@ -227,6 +244,13 @@ def decidir(sessoes: sessionmaker, alerta_id: int, decisao: str, texto: str, u: 
                {"estado": decisao, "decidido_por": u.id, "decidido_em": _agora()},
                "Só o responsável pelo alerta (ou um supervisor) o pode decidir, e só enquanto está em análise.")
         _evento(sessao, alerta_id, u, "estado", "em_analise", decisao, texto)
+        movimento = None
+        transacao_id = sessao.scalar(select(Alerta.transacao_id).where(Alerta.id == alerta_id))
+        retido = contas_bancarias.movimento_da_transacao(sessao, transacao_id)
+        if retido is not None and retido.estado == "retido":
+            movimento = contas_bancarias.liquidar(sessao, retido.id, decisao == "falso_alarme", u.nome_utilizador)
+            sessao.expunge(movimento)
+    return movimento
 
 
 def reabrir(sessoes: sessionmaker, alerta_id: int, texto: str, u: Utilizador) -> None:

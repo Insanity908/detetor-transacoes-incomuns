@@ -42,6 +42,8 @@ ACOES = {
     "deposito": "Registou depósito",
     "conta_bancaria_bloqueada": "Bloqueou conta bancária",
     "conta_bancaria_desbloqueada": "Desbloqueou conta bancária",
+    "movimento_executado": "Executou movimento retido",
+    "movimento_cancelado": "Cancelou movimento retido",
 }
 POR_PAGINA = 50
 

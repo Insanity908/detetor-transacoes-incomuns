@@ -34,6 +34,16 @@
       <div><dt>Categoria</dt><dd>{{ t.categoria | categoria }}</dd></div>
       <div><dt>Transação</dt><dd>{{ t.id_transacao }}</dd></div>
     </dl>
+    {% if banco %}
+    <h3>Movimento no banco</h3>
+    <dl class="ficha">
+      <div><dt>Titular</dt><dd>{{ banco.titular }} ({{ banco.codigo }})</dd></div>
+      <div><dt>Conta</dt><dd>{{ banco.conta }}</dd></div>
+      <div><dt>Saldo disponível</dt><dd>{{ banco.disponivel | mtc }}</dd></div>
+      <div><dt>Movimento</dt><dd>{{ nomes_tipo[banco.tipo] }} · {{ banco.valor | mtc }} · {{ nomes_estado_mov[banco.estado] }}</dd></div>
+      {% if banco.motivo %}<div><dt>Motivo</dt><dd>{{ banco.motivo }}</dd></div>{% endif %}
+    </dl>
+    {% endif %}
     {% if outros %}
     <h3>Outros alertas deste cliente</h3>
     <ul class="lista-simples">
@@ -88,6 +98,7 @@
     <form method="post" action="/alertas/{{ a.id }}/reabrir" class="pilha caixa">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Motivo para reabrir <textarea name="texto" rows="2" required minlength="5" maxlength="2000">{{ rascunho }}</textarea></label>
+      {% if banco and banco.estado != 'retido' %}<p class="ajuda">Reabrir não devolve nem volta a reter o dinheiro.</p>{% endif %}
       <button type="submit" class="secundario">Reabrir alerta</button>
     </form>
     {% endif %}

@@ -115,8 +115,12 @@ def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimen
     if not executar:
         movimento.motivo = "Fraude confirmada."
     else:
+        origem_estado = s.execute(select(ContaBancaria.estado).where(ContaBancaria.id == movimento.conta_id)
+                                  .execution_options(populate_existing=True)).scalar_one()
         destino = s.get(ContaBancaria, movimento.contraparte_id) if movimento.contraparte_id else None
-        if movimento.tipo == "transferencia_enviada" and (destino is None or destino.estado == "bloqueada"):
+        if origem_estado == "bloqueada":
+            movimento.motivo = "A conta foi bloqueada entretanto."
+        elif movimento.tipo == "transferencia_enviada" and (destino is None or destino.estado == "bloqueada"):
             movimento.motivo = "A conta de destino foi bloqueada entretanto."
         else:
             s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)

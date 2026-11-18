@@ -374,3 +374,133 @@ def test_migracao_0003_poe_os_alertas_antigos_na_fila(ambiente_de_teste):
     assert linhas == [("novo", 1, "Alto risco")]
     command.downgrade(configuracao_alembic(url), "0002")
     migrar(url)
+
+
+# ------------------------------------------------------------ decisão liquida o movimento do banco
+def _retido(app, artefatos, monkeypatch, valor=25000, destino=False):
+    """Cria uma conta com saldo e um débito retido (alerta novo); devolve (alerta_id, conta_id, destino_id, mov_id)."""
+    from detector import autorizacao, clientes, contas_bancarias
+    from detector.autorizacao import PedidoDebito
+    from detector.limiares import Cortes
+    from detector.banco import Movimento
+    sessoes = _sessoes(app)
+
+    def conta(n, saldo):
+        form = dict(nome=f"Cliente {n}", data_nascimento="1990-05-10", tipo_documento="NUIT",
+                    numero_documento=f"20000000{n}", telefone="841234567", email=None, cidade="MAPUTO", morada="Rua 1")
+        c = clientes.criar(sessoes, clientes.validar(form), "teste")
+        if saldo:
+            contas_bancarias.depositar(sessoes, c.conta.id, saldo, "balcao", "teste")
+        return c.conta.id
+
+    origem, alvo = conta(1, 100000), conta(2, 0)
+
+    def falso(artefatos, df, historico_extra=None, cortes=None):
+        r = df.copy().reset_index(drop=True)
+        r["risco"], r["anomalia"], r["nivel"] = 90.0, 10.0, "Alto risco"
+        r["motivos"] = [["teste"]] * len(r)
+        r["historico_curto"] = False
+        return r
+    monkeypatch.setattr(autorizacao, "avaliar_transacoes", falso)
+    tipo = "transferencia_enviada" if destino else "compra"
+    pedido = PedidoDebito(conta_id=origem, tipo=tipo, valor=valor, momento=datetime(2026, 11, 18, 10, 0),
+                          cidade="MAPUTO", pais="MZ", categoria="SUPERMERCADO", canal="balcao", por="teste",
+                          contraparte_id=alvo if destino else None)
+    [d] = autorizacao.autorizar(sessoes, artefatos, [pedido], Cortes(), "banco")
+    assert d.estado == "retido"
+    return d.alerta_id, origem, alvo, d.movimento_id
+
+
+def _saldos(app, *ids):
+    from detector.banco import ContaBancaria
+    with _sessoes(app)() as s:
+        return [(s.get(ContaBancaria, i).saldo, s.get(ContaBancaria, i).saldo_retido) for i in ids]
+
+
+def _movimento(app, mov_id):
+    from detector.banco import Movimento
+    with _sessoes(app)() as s:
+        m = s.get(Movimento, mov_id)
+        return m.estado, m.motivo
+
+
+def _supervisor_decide(app, alerta_id, decisao):
+    sup = criar_cliente(app, "supervisor", "sup")
+    _acao(sup, alerta_id, "assumir")
+    return sup, _acao(sup, alerta_id, "decidir", decisao=decisao, texto="Verificado com o cliente.")
+
+
+def test_falso_alarme_executa_o_movimento_retido(app, artefatos_pequenos, monkeypatch):
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch, destino=True)
+    assert _saldos(app, o, d) == [(100000, 25000), (0, 0)]
+    sup, _ = _supervisor_decide(app, i, "falso_alarme")
+    assert _movimento(app, m) == ("autorizado", None)
+    assert _saldos(app, o, d) == [(75000, 0), (25000, 0)]
+    assert ("sup", "movimento_executado", str(m)) in _acoes(app, utilizador="sup")
+    from detector import contas_bancarias
+    assert contas_bancarias.verificar_saldos(_sessoes(app)) == []
+
+
+def test_fraude_cancela_o_movimento_retido(app, artefatos_pequenos, monkeypatch):
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch, destino=True)
+    _supervisor_decide(app, i, "fraude")
+    assert _movimento(app, m) == ("cancelado", "Fraude confirmada.")
+    assert _saldos(app, o, d) == [(100000, 0), (0, 0)]
+    assert ("sup", "movimento_cancelado", str(m)) in _acoes(app, utilizador="sup")
+
+
+def test_falso_alarme_com_conta_de_origem_bloqueada_cancela(app, artefatos_pequenos, monkeypatch):
+    from detector import contas_bancarias
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    contas_bancarias.bloquear(_sessoes(app), o, True, "teste")
+    sup, _ = _supervisor_decide(app, i, "falso_alarme")
+    assert _alerta(app, i).estado == "falso_alarme"
+    assert _movimento(app, m) == ("cancelado", "A conta foi bloqueada entretanto.")
+    assert _saldos(app, o) == [(100000, 0)]
+    assert ("sup", "movimento_cancelado", str(m)) in _acoes(app, utilizador="sup")
+
+
+def test_reabrir_nao_mexe_no_movimento(app, artefatos_pequenos, monkeypatch):
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    sup, _ = _supervisor_decide(app, i, "falso_alarme")
+    pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
+    assert "Reabrir não devolve nem volta a reter o dinheiro." in pagina
+    _acao(sup, i, "reabrir", texto="Rever esta decisão.")
+    assert _alerta(app, i).estado == "em_analise"
+    assert _movimento(app, m) == ("autorizado", None)
+    assert _saldos(app, o) == [(75000, 0)]
+
+
+def test_alerta_de_ficheiro_sem_movimento_decide_na_mesma(app):
+    [i] = _criar_alertas(app, ["Alto risco"])
+    sup, pagina = _supervisor_decide(app, i, "falso_alarme")
+    assert "Alerta encerrado: falso alarme" in pagina.get_data(as_text=True)
+    assert _alerta(app, i).estado == "falso_alarme"
+    assert not any(a[1].startswith("movimento_") for a in _acoes(app, utilizador="sup"))
+    assert "Reabrir não devolve" not in sup.get(f"/alertas/{i}").get_data(as_text=True)
+
+
+def test_se_liquidar_falha_o_alerta_continua_em_analise(app, artefatos_pequenos, monkeypatch):
+    from detector import contas_bancarias
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    sup = criar_cliente(app, "supervisor", "sup")
+    _acao(sup, i, "assumir")
+
+    def falha(*a, **k):
+        raise ValueError("falhou")
+    monkeypatch.setattr(contas_bancarias, "liquidar", falha)
+    pagina = _acao(sup, i, "decidir", decisao="falso_alarme", texto="Verificado com o cliente.")
+    assert _alerta(app, i).estado == "em_analise"
+    assert _movimento(app, m)[0] == "retido"
+    assert not any(a[1] == "decidir_alerta" for a in _acoes(app, utilizador="sup"))
+
+
+def test_ficha_mostra_conta_titular_saldo_e_movimento(app, artefatos_pequenos, monkeypatch):
+    i, o, d, m = _retido(app, artefatos_pequenos, monkeypatch)
+    sup = criar_cliente(app, "supervisor", "sup")
+    pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
+    assert "Cliente 1" in pagina and "750,00 MT" in pagina and "250,00 MT" in pagina and "Retido" in pagina
+    _acao(sup, i, "assumir")
+    _acao(sup, i, "decidir", decisao="fraude", texto="Cliente confirmou a fraude.")
+    pagina = sup.get(f"/alertas/{i}").get_data(as_text=True)
+    assert "Cancelado" in pagina and "Fraude confirmada." in pagina
