@@ -48,6 +48,8 @@
     </div>
   </header>
   <main class="moldura">
+    {% if aviso_modelo and aba != 'modelos' %}<p class="aviso aviso-erro" role="alert">O desempenho do modelo caiu nas transações recentes.
+      <a href="/modelos">Ver a monitorização e treinar uma nova versão</a>.</p>{% endif %}
     {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% for categoria, mensagem in mensagens %}<p class="aviso aviso-{{ categoria }}" role="{{ 'alert' if categoria == 'erro' else 'status' }}">{{ mensagem }}</p>{% endfor %}
     {% endwith %}

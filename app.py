@@ -16,7 +16,7 @@ import pandas as pd
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask.logging import default_handler
 
-from detector import acesso, api, repositorio, tarefas, web_alertas, web_api
+from detector import acesso, api, limiares, repositorio, tarefas, versoes, web_alertas, web_api, web_modelos
 from detector.acesso import auditar, utilizador_atual
 from detector.artefatos import carregar
 from detector.banco import criar_fabrica_sessoes, criar_motor, descrever, migrar, verificar_ligacao
@@ -25,9 +25,7 @@ from detector.entrada import MAX_BYTES, ler_csv, validar
 from detector.exemplos import DESCRICOES, criar_exemplos
 from detector.exemplos import NOMES as NOMES_EXEMPLOS
 from detector.explicacao import formatar_decimal, formatar_mt, nome_categoria
-from detector.avaliacao import NOMES_PERIODO
 from detector.gerador import CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAISES_ESTRANHOS, PAIS_HABITUAL
-from detector.modelos import NOMES, ORDEM_SIMPLICIDADE
 from detector.perfis import perfil_cliente
 from detector.registo import configurar_registo
 from detector.servico import avaliar_transacoes
@@ -36,11 +34,11 @@ RAIZ = Path(__file__).parent
 CAMPOS = ("cliente", "data_hora", "valor", "cidade", "pais", "categoria")
 MAX_LINHAS_TABELA = 500
 ANALISES_RECENTES = 10
-VERSAO = "1.4.0"
+VERSAO = "1.5.0"
 # Páginas que funcionam sem modelos treinados: contas, utilizadores e auditoria.
 SEM_MODELOS = frozenset({"static", "saude", "entrar", "entrar_post", "sair", "senha", "senha_post", "utilizadores",
                          "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria",
-                         *web_alertas.ENDPOINTS, *web_api.ENDPOINTS, "tarefa"})
+                         *web_alertas.ENDPOINTS, *web_api.ENDPOINTS, *web_modelos.SEM_MODELOS, "tarefa"})
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
 INICIO_PERIGOSO = ("\t", "\r")
@@ -88,14 +86,31 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     sessoes = criar_fabrica_sessoes(motor)
     app.config["MOTOR"], app.config["SESSOES"] = motor, sessoes
 
-    app.config["ARTEFATOS"] = artefatos = carregar(pasta_modelos)
+    app.config["PASTA_MODELOS"] = pasta_modelos
+    versoes.interromper_pendentes(sessoes)
+    publicada = versoes.publicada(sessoes)
+    if publicada is None:  # primeira vez: a pasta do treino inicial passa a ser a versão 1
+        artefatos = carregar(pasta_modelos)
+        if artefatos is not None:
+            artefatos.versao = versoes.registar_inicial(sessoes, artefatos).numero
+    else:
+        artefatos = versoes.carregar_versao(pasta_modelos, publicada)
     if artefatos is None:
         registo.warning("Modelos não encontrados ou inválidos em %s: execute python treinar.py", pasta_modelos)
     else:
-        registo.info("Modelos carregados de %s (classificador: %s)", pasta_modelos, artefatos.detector.escolhido)
+        registo.info("Modelos carregados: versão %s de %s (classificador: %s)", artefatos.versao, pasta_modelos,
+                     artefatos.detector.escolhido)
     registo.info("Aplicação pronta (ambiente: %s, banco: %s)", cfg.ambiente, descrever(motor))
-    exemplos = criar_exemplos(artefatos.historico) if artefatos else {}
-    clientes = sorted(artefatos.historico["cliente"].unique()) if artefatos else []
+
+    def usar_artefatos(novos) -> None:
+        """Troca o modelo em uso (no arranque e ao publicar uma versão), sem reiniciar o servidor."""
+        app.config["ARTEFATOS"] = novos
+        app.config["EXEMPLOS"] = criar_exemplos(novos.historico) if novos else {}
+        app.config["CLIENTES"] = sorted(novos.historico["cliente"].unique()) if novos else []
+
+    usar_artefatos(artefatos)
+    app.config["USAR_ARTEFATOS"] = usar_artefatos
+    app.config["CORTES"] = limiares.ler(sessoes)[0]
 
     @app.template_filter("mt")
     def _mt(valor):
@@ -142,7 +157,9 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     api.instalar(app)  # API REST v1 (chaves, limite de pedidos)
     web_api.instalar(app, sessoes)  # documentação da API e gestão das chaves
     fila = app.config["FILA"] = tarefas.FilaTarefas(sessoes, cfg.pasta_envios, lambda: app.config["ARTEFATOS"], cfg)
+    fila.obter_cortes = lambda: app.config["CORTES"]
     fila.retomar()  # ficheiros que ficaram por processar quando o servidor parou
+    web_modelos.instalar(app, sessoes, pasta_modelos)  # versões, re-treino, monitorização e limiares
 
     @app.before_request
     def _exige_modelos():
@@ -191,7 +208,7 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
 
     def _formulario(erro=None, valores=None, linhas=None, estado=200):
         return render_template(
-            "testar.html", erro=erro, valores=valores or {}, linhas=linhas, clientes=clientes,
+            "testar.html", erro=erro, valores=valores or {}, linhas=linhas, clientes=app.config["CLIENTES"],
             cidades=CIDADES, paises=(PAIS_HABITUAL, "ZA", *PAISES_ESTRANHOS), categorias=CATEGORIAS,
             exemplos=[(n, DESCRICOES[n]) for n in NOMES_EXEMPLOS],
         ), estado
@@ -206,6 +223,7 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
         valores = {c: request.form.get(c, "").strip() for c in CAMPOS}
         origem = "exemplo" if nome else "formulario"
         if nome:
+            exemplos = app.config["EXEMPLOS"]
             if nome not in exemplos:
                 return _formulario(erro="Exemplo desconhecido.", estado=400)
             transacoes = pd.DataFrame(exemplos[nome])
@@ -216,8 +234,9 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             except ValueError as exc:
                 mensagem = str(exc).removeprefix("Linha 2: ")
                 return _formulario(erro=mensagem[0].upper() + mensagem[1:], valores=valores, estado=400)
-        resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes)
-        chave = repositorio.guardar_analise(sessoes, resultado, origem, _modelo(), utilizador_id=utilizador_atual().id)
+        resultado = avaliar_transacoes(app.config["ARTEFATOS"], transacoes, cortes=app.config["CORTES"])
+        chave = repositorio.guardar_analise(sessoes, resultado, origem, _modelo(), utilizador_id=utilizador_atual().id,
+                                            versao_modelo=app.config["ARTEFATOS"].versao)
         final = resultado.iloc[-1]
         auditar("testar_transacao", alvo=str(final["cliente"]),
                 detalhe=f"{f'exemplo {nome}' if nome else 'formulário'}; {len(resultado)} transação(ões); "
@@ -267,7 +286,8 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             tarefa = fila.submeter(conteudo, ficheiro.filename, len(transacoes), utilizador_atual().id)
             return redirect(url_for("tarefa", chave=tarefa))
         chave, total, n_alertas = tarefas.analisar_ficheiro(app.config["ARTEFATOS"], sessoes, cfg, transacoes,
-                                                            ficheiro.filename, utilizador_atual().id)
+                                                            ficheiro.filename, utilizador_atual().id,
+                                                            app.config["CORTES"])
         auditar("analisar_ficheiro", alvo=chave,
                 detalhe=f"{ficheiro.filename[:200]}: {total} transações, {n_alertas} com alerta")
         return _analisar(chave=chave)
@@ -307,7 +327,7 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
     @app.get("/perfil")
     def perfil():
         codigo = request.args.get("cliente", "").strip().upper()
-        dados = {"clientes": clientes, "codigo": codigo, "perfil": None, "marcadas": [], "tipos": NOMES_TIPO_FRAUDE}
+        dados = {"clientes": app.config["CLIENTES"], "codigo": codigo, "perfil": None, "marcadas": [], "tipos": NOMES_TIPO_FRAUDE}
         if not codigo:
             return render_template("perfil.html", **dados)
         art = app.config["ARTEFATOS"]
@@ -322,12 +342,6 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
             dados["marcadas"] = marcadas.sort_values("data_hora").to_dict("records")
         dados["maximo_hora"] = max(dados["perfil"]["horas"]) or 1
         return render_template("perfil.html", **dados)
-
-    @app.get("/modelos")
-    def modelos():
-        return render_template("modelos.html", res=app.config["ARTEFATOS"].resultados, nomes=NOMES,
-                               ordem=[*ORDEM_SIMPLICIDADE, "isolation_forest"], periodos=NOMES_PERIODO,
-                               tipos=NOMES_TIPO_FRAUDE)
 
     @app.get("/graficos/<nome>")
     def graficos(nome):

@@ -30,6 +30,7 @@ class Artefatos:
     teste_avaliado: pd.DataFrame
     resultados: dict
     pasta: Path
+    versao: int | None = None  # número no registo de versões (detector/versoes.py)
 
 
 def _chave_padrao() -> str:

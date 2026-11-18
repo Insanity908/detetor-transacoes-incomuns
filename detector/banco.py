@@ -76,6 +76,7 @@ class Analise(Base):
 
     chave_api_id: Mapped[int | None] = mapped_column(ForeignKey("chaves_api.id", ondelete="SET NULL"),
                                                      index=True)  # nas transações recebidas pela API
+    versao_modelo: Mapped[int | None] = mapped_column(Integer, index=True)  # número da versão que avaliou
 
     utilizador: Mapped[Utilizador | None] = relationship(lazy="joined")
 
@@ -241,3 +242,34 @@ class Tarefa(Base):
     concluida_em: Mapped[datetime | None] = mapped_column(DateTime)
     analise_chave: Mapped[str | None] = mapped_column(String(32))
     erro: Mapped[str | None] = mapped_column(Text)
+
+
+ESTADOS_VERSAO = ("a_treinar", "candidata", "publicada", "anterior", "falhou")
+
+
+class VersaoModelo(Base):
+    """Uma versão dos modelos: a pasta com os ficheiros assinados e as métricas com que foi aprovada."""
+    __tablename__ = "versoes_modelo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    numero: Mapped[int] = mapped_column(Integer, unique=True)
+    estado: Mapped[str] = mapped_column(String(20), index=True)
+    origem: Mapped[str] = mapped_column(String(20))  # inicial | retreino
+    pasta: Mapped[str] = mapped_column(String(255))  # relativa a PASTA_MODELOS
+    classificador: Mapped[str | None] = mapped_column(String(50))
+    criada_em: Mapped[datetime] = mapped_column(DateTime)
+    criada_por: Mapped[str] = mapped_column(String(50))
+    publicada_em: Mapped[datetime | None] = mapped_column(DateTime)
+    publicada_por: Mapped[str | None] = mapped_column(String(50))
+    metricas: Mapped[str | None] = mapped_column(Text)  # JSON: desempenho no teste, comparação, dados usados
+    erro: Mapped[str | None] = mapped_column(Text)
+
+
+class Ajuste(Base):
+    """Configurações mudadas na interface (por exemplo, os limiares de alerta), com quem as mudou."""
+    __tablename__ = "ajustes"
+
+    chave: Mapped[str] = mapped_column(String(50), primary_key=True)
+    valor: Mapped[str] = mapped_column(Text)
+    alterado_em: Mapped[datetime] = mapped_column(DateTime)
+    alterado_por: Mapped[str] = mapped_column(String(50))

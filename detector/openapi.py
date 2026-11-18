@@ -4,7 +4,7 @@ Pode ser aberta em qualquer ferramenta compatível (Swagger Editor, Swagger UI, 
 """
 from __future__ import annotations
 
-from .gerador import TIPOS_FRAUDE
+from .simulacao import TIPOS_SIMULACAO
 
 MAX_LOTE = 500
 
@@ -36,7 +36,7 @@ def especificacao(servidor: str = "") -> dict:
                 "type": "object", "additionalProperties": False, "required": ["fraude"],
                 "description": "Só para o simulador: o que o gerador marcou. Nunca é mostrado aos analistas.",
                 "properties": {"fraude": {"type": "boolean"},
-                               "tipo": {"type": "string", "enum": ["", *TIPOS_FRAUDE]}},
+                               "tipo": {"type": "string", "enum": ["", *TIPOS_SIMULACAO]}},
             },
         },
     }

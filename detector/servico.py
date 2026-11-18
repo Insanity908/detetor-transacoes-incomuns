@@ -28,7 +28,7 @@ def _historico_por_cliente(historico: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame,
-                       historico_extra: pd.DataFrame | None = None) -> pd.DataFrame:
+                       historico_extra: pd.DataFrame | None = None, cortes=None) -> pd.DataFrame:
     """Recebe transações já validadas e devolve-as, pela mesma ordem, com risco, nível e motivos.
 
     historico_extra junta ao histórico do treino as transações recebidas antes (pela API), para que uma rajada
@@ -40,7 +40,11 @@ def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame,
     partes = [por_cliente[c] for c in sorted(clientes) if c in por_cliente]  # só o passado de quem foi enviado
     if historico_extra is not None and len(historico_extra):
         extra = normalizar(historico_extra)
-        partes.append(extra[extra["cliente"].isin(clientes)])
+        extra = extra[extra["cliente"].isin(clientes)]
+        if partes and "id_transacao" in extra.columns:  # depois de um re-treino, o histórico já inclui parte da API
+            ja = set(pd.concat(partes)["id_transacao"].astype(str)) if "id_transacao" in partes[0].columns else set()
+            extra = extra[~extra["id_transacao"].astype(str).isin(ja)]
+        partes.append(extra)
     historico = (pd.concat(partes, ignore_index=True) if partes
                  else normalizar(artefatos.historico.iloc[:0]))
     if "id_transacao" in historico.columns:  # a mesma transação já guardada não pode ser o próprio passado
@@ -49,7 +53,7 @@ def avaliar_transacoes(artefatos: Artefatos, transacoes: pd.DataFrame,
         manter = np.array([c not in repetidas for c in chave(historico)], dtype=bool)  # lista vazia seria colunas
         historico = historico[manter]
     features = calcular_features(transacoes, historico=historico)
-    return montar_resultado(transacoes, features, artefatos.detector.avaliar(features), historico)
+    return montar_resultado(transacoes, features, artefatos.detector.avaliar(features, cortes), historico)
 
 
 def montar_resultado(transacoes: pd.DataFrame, features: pd.DataFrame, avaliacao: pd.DataFrame,

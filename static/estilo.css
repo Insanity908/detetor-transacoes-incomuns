@@ -171,3 +171,11 @@ textarea { font: inherit; font-weight: 400; color: inherit; background: var(--su
 pre.codigo { background: var(--tinta); color: #eef2f5; padding: 1rem; border-radius: 3px; overflow-x: auto; font-size: .85rem; }
 code.chave { display: inline-block; font-size: 1rem; padding: .3rem .5rem; word-break: break-all; user-select: all; }
 .chave-nova { border-left: 6px solid var(--normal); }
+
+/* Modelos: versões e limiares */
+.estado-versao-publicada { color: var(--normal); border-color: var(--normal); }
+.estado-versao-candidata { color: var(--acao); border-color: var(--acao); }
+.estado-versao-a_treinar { color: var(--tinta); border-color: var(--tinta); }
+.estado-versao-falhou { color: var(--alto); border-color: var(--alto); }
+.aviso a { color: inherit; }
+.melhor { font-weight: 700; }

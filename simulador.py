@@ -7,6 +7,7 @@ Execução, na raiz do projeto (com o sistema ligado e uma chave criada em API >
     python simulador.py --velocidade 600 --fraude 5     mais depressa e com mais fraude
     python simulador.py --tipos rajada,valor_alto       só estes tipos de fraude
     python simulador.py --duracao 300                   pára ao fim de 5 minutos (0 = até Ctrl+C)
+    python simulador.py --cenario novo_tipo             cenário de mudança: novo_tipo, habitos ou valores
 
 A chave também pode vir da variável de ambiente DETETOR_CHAVE_API. Os alertas aparecem na fila (Alertas).
 A cada intervalo, o simulador mostra quantas fraudes injetou e quantas o sistema apanhou.
@@ -21,10 +22,11 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
-from typing import Callable
+from collections.abc import Callable
 
-from detector.gerador import NOMES_TIPO_FRAUDE, TIPOS_FRAUDE
-from detector.simulacao import Estatisticas, Simulador, clientes_do_treino
+from detector.gerador import TIPOS_FRAUDE
+from detector.simulacao import (CENARIOS, NOMES_TIPO_SIMULACAO, TIPOS_SIMULACAO, Estatisticas,
+                                Simulador, clientes_do_treino)
 
 MAX_LOTE = 500
 TENTATIVAS = 5
@@ -88,7 +90,7 @@ def resumo(est: Estatisticas, agora: datetime) -> str:
     linhas = [f"[{agora:%d/%m %H:%M} simulado] enviadas {est.enviadas} · fraudes {est.fraudes} "
               f"(apanhadas {est.fraudes_com_alerta}, {_pct(est.detecao)}) · "
               f"alertas em legítimas {est.legitimas_com_alerta} ({_pct(est.falsos_alertas)})"]
-    tipos = [f"{NOMES_TIPO_FRAUDE[t]} {a}/{n}" for t, (n, a) in est.por_tipo.items() if n]
+    tipos = [f"{NOMES_TIPO_SIMULACAO[t]} {a}/{n}" for t, (n, a) in est.por_tipo.items() if n]
     if tipos:
         linhas.append("   por tipo (apanhadas/enviadas): " + " · ".join(tipos))
     return "\n".join(linhas)
@@ -140,7 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--velocidade", type=float, default=60,
                    help="segundos simulados por segundo real (60 = um dia em 24 minutos; 1 = tempo real)")
     p.add_argument("--fraude", type=float, default=2.0, help="percentagem de transações fraudulentas (0 a 50)")
-    p.add_argument("--tipos", default=",".join(TIPOS_FRAUDE), help=f"tipos de fraude: {', '.join(TIPOS_FRAUDE)}")
+    p.add_argument("--tipos", default=",".join(TIPOS_FRAUDE), help=f"tipos de fraude: {', '.join(TIPOS_SIMULACAO)}")
+    p.add_argument("--cenario", default="nenhum", choices=list(CENARIOS),
+                   help="mudança no comportamento: " + "; ".join(f"{k}: {v}" for k, v in CENARIOS.items()))
     p.add_argument("--duracao", type=float, default=0, help="segundos reais até parar (0 = até Ctrl+C)")
     p.add_argument("--inicio", help="data e hora simulada inicial (ISO 8601); por omissão, onde o histórico parou")
     p.add_argument("--clientes", type=int, default=300, help="clientes do treino (tem de ser igual ao treino)")
@@ -157,12 +161,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         inicio = datetime.fromisoformat(args.inicio) if args.inicio else inicio_padrao(api)
         sim = Simulador(clientes_do_treino(args.clientes), inicio, args.fraude,
-                        tuple(t.strip() for t in args.tipos.split(",") if t.strip()), args.semente)
+                        tuple(t.strip() for t in args.tipos.split(",") if t.strip()), args.semente, cenario=args.cenario)
     except (ValueError, ErroFatal) as exc:
         print(f"Erro: {exc}", file=sys.stderr)
         return 1
     print(f"Simulador ligado a {args.url}: início simulado {inicio:%d/%m/%Y %H:%M}, velocidade {args.velocidade:g}x, "
-          f"{args.fraude:g}% de fraude ({', '.join(sim.tipos)}). Ids {sim.prefixo}-*. Ctrl+C para parar.", flush=True)
+          f"{args.fraude:g}% de fraude ({', '.join(sorted(set(sim.tipos)))}), cenário {args.cenario}. "
+          f"Ids {sim.prefixo}-*. Ctrl+C para parar.", flush=True)
     try:
         simular(api, sim, args.velocidade, args.duracao, escrever=lambda t: print(t, flush=True))
     except ErroFatal as exc:

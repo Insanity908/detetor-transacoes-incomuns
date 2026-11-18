@@ -1,14 +1,115 @@
 {% extends "base.html" %}
+{% macro medida(x) %}{{ x | pct }}{% endmacro %}
 {% block conteudo %}
 <h1>Modelos</h1>
+
+{% set base = monitor.base %}{% set atual = monitor.atual %}
+{% if monitor.aviso %}
+<div class="aviso aviso-erro" role="alert">O desempenho da versão {{ monitor.versao }} caiu nas transações recentes:
+  {% if 'f1' in monitor.motivos %}F1 {{ atual.f1 | decimal(3) }} (no teste: {{ base.f1 | decimal(3) }}){% endif %}
+  {% if 'recall' in monitor.motivos %}{% if 'f1' in monitor.motivos %} · {% endif %}fraudes apanhadas {{ atual.recall | pct }} (no teste: {{ base.recall | pct }}){% endif %}
+  {% if 'falsos' in monitor.motivos %}{% if monitor.motivos | length > 1 %} · {% endif %}falsos alarmes {{ atual.falsos_por_mil | decimal(1) }} por mil compras legítimas (no teste: {{ base.falsos_por_mil | decimal(1) }}){% endif %}.
+  O comportamento dos clientes ou das fraudes pode ter mudado. Treine uma nova versão com os dados recentes.</div>
+{% endif %}
+
+<div class="colunas">
+<section aria-labelledby="titulo-uso">
+  <h2 id="titulo-uso">Versão em uso</h2>
+  {% if publicada %}
+  <p><strong>Versão {{ publicada.numero }}</strong> · {{ nomes.get(publicada.classificador, publicada.classificador) }}<br>
+    <span class="ajuda">Publicada em {{ publicada.publicada_em.strftime('%d/%m/%Y %H:%M') }} por {{ publicada.publicada_por }}.
+    {% if publicada.origem == 'inicial' %}Treino inicial com os dados do gerador.{% else %}Re-treino com as transações da API.{% endif %}</span></p>
+  {% else %}<p class="ajuda">Nenhuma versão publicada.</p>{% endif %}
+  <p>Limiares de alerta: risco <strong>{{ cortes.risco | decimal(0) }}</strong>, anomalia <strong>{{ cortes.anomalia | decimal(0) }}</strong>
+    {% if cortes.padrao %}<span class="ajuda">(os do treino)</span>{% endif %}
+    {% if utilizador.pode('supervisor') %} · <a href="/modelos/limiares">Ajustar</a>{% endif %}</p>
+</section>
+
+<section aria-labelledby="titulo-recente">
+  <h2 id="titulo-recente">Desempenho recente</h2>
+  {% if atual %}
+  <div class="rolagem"><table class="estreita">
+    <thead><tr><th>Medida</th><th class="num">No teste da versão</th><th class="num">Últimas {{ atual.transacoes }}</th></tr></thead>
+    <tbody>
+      <tr><td>Fraudes</td><td class="num">{{ base.fraudes if base else '—' }}</td><td class="num">{{ atual.fraudes }}</td></tr>
+      <tr><td>Fraudes apanhadas (recall)</td><td class="num">{{ base.recall | pct if base else '—' }}</td><td class="num">{{ atual.recall | pct }}</td></tr>
+      <tr><td>Alertas que eram fraude (precisão)</td><td class="num">{{ base.precisao | pct if base else '—' }}</td><td class="num">{{ atual.precisao | pct }}</td></tr>
+      <tr><td>Falsos alarmes por mil legítimas</td>
+        <td class="num">{{ (base.falsos_por_mil | decimal(1)) if base and base.get('falsos_por_mil') is not none else '—' }}</td>
+        <td class="num">{{ (atual.falsos_por_mil | decimal(1)) if atual.falsos_por_mil is not none else '—' }}</td></tr>
+      <tr><td>F1</td><td class="num">{{ (base.f1 | decimal(3)) if base and base.f1 is not none else '—' }}</td>
+        <td class="num">{{ (atual.f1 | decimal(3)) if atual.f1 is not none else '—' }}</td></tr>
+    </tbody>
+  </table></div>
+  <p class="ajuda">Transações da API avaliadas por esta versão, de {{ atual.desde.strftime('%d/%m %H:%M') }} a
+    {{ atual.ate.strftime('%d/%m %H:%M') }}. A verdade é a decisão do analista ou, sem ela, o que o gerador marcou.
+    Avisa quando o F1 cai {{ queda_f1 | decimal(2) }} ou o recall {{ queda_recall | pct }} em relação ao teste, ou quando os
+    falsos alarmes duplicam.
+    {% if not monitor.suficiente %}Ainda há menos de {{ min_fraudes }} fraudes: o recall e o F1 ainda são pouco fiáveis.{% endif %}</p>
+  {% if monitor.por_dia %}
+  <details class="tabela-dados"><summary>Ver dia a dia (data das transações)</summary>
+    <div class="rolagem"><table class="estreita">
+      <thead><tr><th>Dia</th><th class="num">Transações</th><th class="num">Fraudes</th><th class="num">Apanhadas</th>
+        <th class="num">Alertas</th><th class="num">Precisão</th></tr></thead>
+      <tbody>{% for d in monitor.por_dia %}<tr><td>{{ d.dia.strftime('%d/%m/%Y') }}</td><td class="num">{{ d.transacoes }}</td>
+        <td class="num">{{ d.fraudes }}</td><td class="num">{{ d.apanhadas }}</td><td class="num">{{ d.alertas }}</td>
+        <td class="num">{{ d.precisao | pct }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+  {% else %}
+  <p class="ajuda">Ainda não há transações da API com rótulo avaliadas por esta versão. Ligue o simulador
+    (<code>python simulador.py</code>) para ver o desempenho em tempo real.</p>
+  {% endif %}
+</section>
+</div>
+
+<h2 class="separado">Versões</h2>
+<div class="rolagem"><table>
+  <thead><tr><th>Versão</th><th>Estado</th><th>Criada</th><th>Classificador</th><th class="num">Recall no teste</th>
+    <th class="num">Precisão no teste</th><th class="num">F1 no teste</th><th></th></tr></thead>
+  <tbody>
+  {% for v in versoes %}{% set m = metricas(v) %}{% set t = m.get('teste_alertas') %}
+    <tr{% if v.estado == 'publicada' %} class="destaque"{% endif %}>
+      <td><a href="/modelos/versoes/{{ v.numero }}">v{{ v.numero }}</a></td>
+      <td><span class="estado estado-versao-{{ v.estado }}">{{ estados[v.estado] }}</span></td>
+      <td>{{ v.criada_em.strftime('%d/%m/%Y %H:%M') }} · {{ v.criada_por }}</td>
+      <td>{{ nomes.get(v.classificador, v.classificador or '—') }}</td>
+      <td class="num">{{ t.recall | pct if t else '—' }}</td><td class="num">{{ t.precisao | pct if t else '—' }}</td>
+      <td class="num">{{ (t.f1 | decimal(3)) if t and t.f1 is not none else '—' }}</td>
+      <td>{% if v.estado in ('candidata', 'anterior') and utilizador.pode('supervisor') %}
+        <form method="post" action="/modelos/versoes/{{ v.numero }}/publicar">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="secundario">{{ 'Publicar' if v.estado == 'candidata' else 'Voltar a esta' }}</button>
+        </form>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="ajuda">Cada versão é medida no seu próprio período de teste; para comparar uma candidata com a versão em uso nos
+  mesmos dados, abra a candidata.</p>
+{% if utilizador.pode('supervisor') %}
+<form method="post" action="/modelos/retreinar" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p class="ajuda">O re-treino junta o histórico às transações recebidas pela API, com a decisão do analista como rótulo
+    (ou, sem ela, o que o gerador marcou). Precisa de {{ min_transacoes }} transações com rótulo e de
+    {{ min_fraudes_retreino }} fraudes nas mais recentes. Demora um a dois minutos e não muda nada até publicar.</p>
+  <button type="submit" class="principal">Treinar nova versão</button>
+</form>
+{% endif %}
+
+{% if res %}
+<h2 class="separado">Detalhe da versão em uso</h2>
+{% endif %}
 {% if not res %}
-<p class="ajuda">Os resultados da avaliação ainda não existem. Execute <code>python treinar.py</code> para os gerar.</p>
+<p class="ajuda">Os resultados da avaliação desta versão não existem. Execute <code>python treinar.py</code> para os gerar.</p>
 {% else %}
 {% set esc = res.escolhido %}
-<p class="ajuda">Três classificadores supervisionados e um detetor de anomalias, treinados com dados de {{ res.dados.clientes }} clientes.
+<p class="ajuda">Três classificadores supervisionados e um detetor de anomalias, treinados com dados de {{ res.dados.clientes }} clientes{% if res.retreino %},
+  incluindo {{ res.dados.api }} transações recebidas pela API{% endif %}.
   Métricas da classe fraude: a acurácia engana, porque com cerca de 1% de fraudes dizer "legítima" para tudo já dá 99% de acurácia.</p>
 
-<h2>Modelo escolhido</h2>
+<h3>Modelo escolhido</h3>
 <p><strong>{{ nomes[esc] }}.</strong> {{ res.motivo_escolha }} O limiar e o modelo vêm só da validação; o teste só mede.</p>
 {% if res.aviso_gerador_facil %}<p class="erro">O F1 no teste passou de 0,98: o gerador provavelmente ficou fácil demais.</p>{% endif %}
 
@@ -35,7 +136,7 @@
 <div class="rolagem"><table>
   <thead><tr><th>Tipo</th><th class="num">{{ nomes[esc] }}</th><th class="num">Isolation Forest</th></tr></thead>
   <tbody>
-  {% for tipo, nome in tipos.items() %}
+  {% for tipo, nome in tipos.items() if tipo in res.recall_por_tipo.escolhido %}
     <tr><td>{{ nome }}</td><td class="num">{{ res.recall_por_tipo.escolhido.get(tipo) | pct }}</td>
       <td class="num">{{ res.recall_por_tipo.isolation_forest.get(tipo) | pct }}</td></tr>
   {% endfor %}
@@ -65,6 +166,7 @@
 {% if n.fraudes < 10 %}<p class="ajuda">Há poucas fraudes de clientes novos no teste: a percentagem de fraudes apanhadas neste grupo é pouco fiável.</p>{% endif %}
 {% endif %}
 
+{% if res.divisao_aleatoria %}
 <h2>Divisão aleatória contra divisão por tempo</h2>
 <div class="rolagem"><table class="estreita">
   <thead><tr><th>Divisão</th><th class="num">F1 no teste</th></tr></thead>
@@ -74,5 +176,6 @@
   </tbody>
 </table></div>
 <p class="ajuda">A divisão por tempo corresponde ao uso real: treinar com o passado e avaliar o futuro.</p>
+{% endif %}
 {% endif %}
 {% endblock %}

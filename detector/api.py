@@ -15,7 +15,7 @@ from flask import Blueprint, Flask, current_app, g, jsonify, request
 from sqlalchemy.orm import sessionmaker
 
 from . import chaves_api, repositorio
-from .gerador import TIPOS_FRAUDE
+from .simulacao import TIPOS_SIMULACAO
 from .servico import avaliar_transacoes
 
 VERSAO_API = "1.0.0"
@@ -125,9 +125,9 @@ def validar_pedido(corpo, agora: datetime | None = None) -> pd.DataFrame:
         if simulacao is not None:
             if (not isinstance(simulacao, dict) or set(simulacao) - {"fraude", "tipo"}
                     or not isinstance(simulacao.get("fraude"), bool)
-                    or simulacao.get("tipo", "") not in ("", *TIPOS_FRAUDE)):
+                    or simulacao.get("tipo", "") not in ("", *TIPOS_SIMULACAO)):
                 erros.append({"indice": i, "campo": "simulacao",
-                              "erro": f"objeto {{fraude: true|false, tipo: um de {', '.join(TIPOS_FRAUDE)}}}"})
+                              "erro": f"objeto {{fraude: true|false, tipo: um de {', '.join(TIPOS_SIMULACAO)}}}"})
             else:
                 fraude_simulada, tipo_simulado = simulacao["fraude"], simulacao.get("tipo") or None
         if len(erros) == n_erros:
@@ -204,9 +204,10 @@ def receber_transacoes():
         clientes = set(novas["cliente"].str.strip().str.upper())
         desde = novas["data_hora"].min().to_pydatetime() - timedelta(days=DIAS_HISTORICO)
         historico = repositorio.historico_api(sessoes, clientes, desde)
-        resultado = avaliar_transacoes(artefatos, novas, historico_extra=historico)
+        resultado = avaliar_transacoes(artefatos, novas, historico_extra=historico,
+                                       cortes=current_app.config.get("CORTES"))
         repositorio.guardar_analise(sessoes, resultado, "api", artefatos.detector.escolhido,
-                                    gerar_alertas=True, chave_api_id=g.chave_api.id)
+                                    gerar_alertas=True, chave_api_id=g.chave_api.id, versao_modelo=artefatos.versao)
     gravados = repositorio.resultados_api(sessoes, list(novas["id_transacao"]))
     resultados = [_resultado(anteriores[i], True) if i in anteriores else _resultado(gravados[i], False)
                   for i in transacoes["id_transacao"]]

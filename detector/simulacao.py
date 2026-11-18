@@ -4,6 +4,13 @@ Usa os mesmos clientes que o gerador do treino (mesma semente e número de clien
 com a sua cidade, horário de pico, valor típico e categorias, por isso o modelo reconhece os seus hábitos.
 Por cima das compras normais injeta os 5 tipos de fraude que o gerador conhece.
 
+Cenários de mudança (opção --cenario), para mostrar a monitorização a detetar a queda de desempenho e o
+re-treino a corrigi-la:
+- novo_tipo: aparece a "compra fracionada", um tipo de fraude que o modelo nunca viu (várias compras de valor
+  médio, nas categorias e na cidade habituais do cliente, espaçadas de 15 a 40 minutos);
+- habitos: os clientes passam a comprar seis horas mais tarde e metade das compras numa categoria nova;
+- valores: inflação, todos os valores (legítimos e fraudes) passam a ser 2,5 vezes maiores.
+
 O tempo é simulado: começa onde o histórico acabou e avança `velocidade` vezes mais depressa do que o relógio
 (60 = um minuto simulado por segundo real; um dia inteiro em 24 minutos). O ritmo das compras vem da taxa
 diária de cada cliente e do seu horário, como no gerador: de madrugada há poucas, à hora de pico muitas.
@@ -19,11 +26,22 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from . import gerador
-from .gerador import CATEGORIAS, CIDADES, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
+from .gerador import CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
 
 DESVIO_HORA = 2.5  # como gerador._hora
 FRACAO_NOTURNA = 0.02  # compras legítimas entre a meia-noite e as 5h
-TRANSACOES_POR_EVENTO = {"rajada": 5.5}  # média; os outros tipos têm uma transação
+TIPO_NOVO = "fracionada"
+TIPOS_SIMULACAO = (*TIPOS_FRAUDE, TIPO_NOVO)  # o treino só conhece TIPOS_FRAUDE
+NOMES_TIPO_SIMULACAO = NOMES_TIPO_FRAUDE | {TIPO_NOVO: "Compra fracionada (nova)"}
+TRANSACOES_POR_EVENTO = {"rajada": 5.5, TIPO_NOVO: 4.0}  # média; os outros tipos têm uma transação
+CENARIOS = {
+    "nenhum": "Sem mudanças: os clientes e as fraudes continuam como no treino.",
+    "novo_tipo": "Novo tipo de fraude: compras fracionadas que o modelo nunca viu (metade das fraudes).",
+    "habitos": "Mudança de hábitos: compras seis horas mais tarde e metade numa categoria nova.",
+    "valores": "Inflação: todos os valores 2,5 vezes maiores.",
+}
+INFLACAO = 2.5
+ATRASO_HABITOS = 6  # horas
 
 
 def clientes_do_treino(n_clientes: int = 300, dias: int = gerador.DIAS, semente: int = 42) -> list[dict]:
@@ -48,6 +66,7 @@ class Simulador:
     fraude_pct: float = 2.0  # percentagem das transações que são fraude
     tipos: tuple[str, ...] = TIPOS_FRAUDE
     semente: int | None = None
+    cenario: str = "nenhum"
     prefixo: str = field(default_factory=lambda: "SIM-" + secrets.token_hex(3).upper())
     rng: np.random.Generator = field(init=False)
     _fila: list = field(init=False, default_factory=list)
@@ -57,12 +76,18 @@ class Simulador:
     def __post_init__(self):
         if not 0 <= self.fraude_pct <= 50:
             raise ValueError("A percentagem de fraude tem de estar entre 0 e 50.")
-        desconhecidos = set(self.tipos) - set(TIPOS_FRAUDE)
+        desconhecidos = set(self.tipos) - set(TIPOS_SIMULACAO)
         if desconhecidos or not self.tipos:
-            raise ValueError(f"Tipos de fraude válidos: {', '.join(TIPOS_FRAUDE)}")
+            raise ValueError(f"Tipos de fraude válidos: {', '.join(TIPOS_SIMULACAO)}")
+        if self.cenario not in CENARIOS:
+            raise ValueError(f"Cenários válidos: {', '.join(CENARIOS)}")
+        if self.cenario == "novo_tipo" and TIPO_NOVO not in self.tipos:  # metade das fraudes passa a ser do tipo novo
+            self.tipos = (*self.tipos, *([TIPO_NOVO] * len(self.tipos)))
         self.rng = np.random.default_rng(self.semente)
         self.taxas = np.array([c["taxa"] for c in self.clientes])  # compras por dia
-        self.horarias = np.array([_distribuicao_horaria(c["pico"]) for c in self.clientes])  # cliente x hora
+        atraso = ATRASO_HABITOS if self.cenario == "habitos" else 0
+        self.horarias = np.array([np.roll(_distribuicao_horaria(c["pico"]), atraso) for c in self.clientes])
+        self.fator_valor = INFLACAO if self.cenario == "valores" else 1.0
         legitimas_por_dia = self.taxas.sum()
         media_por_evento = np.mean([TRANSACOES_POR_EVENTO.get(t, 1.0) for t in self.tipos])
         p = self.fraude_pct / 100
@@ -113,7 +138,7 @@ class Simulador:
             "id_transacao": f"{self.prefixo}-{next(self._ids):07d}",
             "cliente": c["cliente"],
             "data_hora": quando.replace(microsecond=0).isoformat(),
-            "valor": round(max(float(valor), 1.0), 2),
+            "valor": round(max(float(valor) * self.fator_valor, 1.0), 2),
             "cidade": cidade,
             "pais": pais,
             "categoria": categoria,
@@ -126,6 +151,8 @@ class Simulador:
             valor = c["tipico"] * self.rng.uniform(3, 8)
         pais = "ZA" if self.rng.random() < 0.01 else PAIS_HABITUAL
         categoria = str(self.rng.choice(c["categorias"], p=c["peso_categorias"]))
+        if self.cenario == "habitos" and self.rng.random() < 0.5:
+            categoria = str(self.rng.choice([x for x in CATEGORIAS if x not in c["categorias"]]))
         return quando, self._transacao(c, quando, valor, self._cidade(c), pais, categoria)
 
     def _fraude(self, c: dict, tipo: str, quando: datetime) -> list[tuple[datetime, dict]]:
@@ -136,6 +163,12 @@ class Simulador:
             momentos = [quando + timedelta(minutes=float(m)) for m in np.cumsum(self.rng.uniform(0.5, 3, n))]
             return [(m, self._transacao(c, m, max(c["tipico"] * self.rng.uniform(0.05, 0.3), 20), cidade,
                                         PAIS_HABITUAL, categoria(), tipo)) for m in momentos]
+        if tipo == TIPO_NOVO:
+            n = int(self.rng.integers(3, 6))
+            momentos = [quando + timedelta(minutes=float(m)) for m in np.cumsum(self.rng.uniform(15, 40, n))]
+            return [(m, self._transacao(c, m, c["tipico"] * self.rng.uniform(1.5, 2.5), cidade, PAIS_HABITUAL,
+                                        str(self.rng.choice(c["categorias"], p=c["peso_categorias"])), tipo))
+                    for m in momentos]
         if tipo == "valor_alto":
             return [(quando, self._transacao(c, quando, c["tipico"] * self.rng.uniform(3, 15), cidade, PAIS_HABITUAL,
                                              categoria(), tipo))]
@@ -165,7 +198,7 @@ class Estatisticas:
     legitimas_com_alerta: int = 0
     duplicadas: int = 0
     rejeitadas: int = 0
-    por_tipo: dict = field(default_factory=lambda: {t: [0, 0] for t in TIPOS_FRAUDE})  # [enviadas, com alerta]
+    por_tipo: dict = field(default_factory=lambda: {t: [0, 0] for t in TIPOS_SIMULACAO})  # [enviadas, com alerta]
 
     def registar(self, enviada: dict, resultado: dict) -> None:
         if resultado.get("duplicada"):

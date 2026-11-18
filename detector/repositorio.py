@@ -19,7 +19,8 @@ ORIGENS = ("ficheiro", "formulario", "exemplo", "api")
 
 def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str, modelo: str,
                     nome_ficheiro: str | None = None, utilizador_id: int | None = None,
-                    gerar_alertas: bool = False, chave_api_id: int | None = None) -> str:
+                    gerar_alertas: bool = False, chave_api_id: int | None = None,
+                    versao_modelo: int | None = None) -> str:
     """Grava o resultado pela ordem em que está e devolve a chave usada nos endereços da interface.
 
     Com gerar_alertas, cada transação com alerta entra na fila de alertas, na mesma transação do banco.
@@ -52,7 +53,7 @@ def guardar_analise(sessoes: sessionmaker, resultado: pd.DataFrame, origem: str,
         analise = Analise(chave=chave, origem=origem, nome_ficheiro=(nome_ficheiro or None) and nome_ficheiro[:255],
                           criada_em=datetime.now().replace(microsecond=0), total=len(linhas),
                           alertas=sum(l["nivel"] != "Normal" for l in linhas), modelo=modelo,
-                          utilizador_id=utilizador_id, chave_api_id=chave_api_id)
+                          utilizador_id=utilizador_id, chave_api_id=chave_api_id, versao_modelo=versao_modelo)
         sessao.add(analise)
         sessao.flush()
         if linhas:

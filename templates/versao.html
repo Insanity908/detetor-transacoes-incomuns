@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Versão {{ v.numero }} · Detetor de Fraudes Financeiras{% endblock %}
+{% block cabeca %}{% if v.estado == 'a_treinar' %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block conteudo %}
+<p><a href="/modelos">← Modelos</a></p>
+<h1>Versão {{ v.numero }} <span class="estado estado-versao-{{ v.estado }}">{{ estados[v.estado] }}</span></h1>
+<p class="ajuda">Criada em {{ v.criada_em.strftime('%d/%m/%Y às %H:%M') }} por {{ v.criada_por }}
+  {% if v.classificador %} · {{ nomes.get(v.classificador, v.classificador) }}{% endif %}
+  {% if v.publicada_em %} · publicada em {{ v.publicada_em.strftime('%d/%m/%Y %H:%M') }} por {{ v.publicada_por }}{% endif %}
+  {% if m.segundos %} · treinada em {{ m.segundos | decimal(0) }} s{% endif %}</p>
+
+{% if v.estado == 'a_treinar' %}
+<p role="status"><strong>A treinar.</strong> Pode demorar um a dois minutos; esta página atualiza-se sozinha.</p>
+{% elif v.estado == 'falhou' %}
+<p class="erro" role="alert">{{ v.erro }}</p>
+{% endif %}
+
+{% set c = m.get('comparacao') %}
+{% if c %}
+<h2>Comparação com a versão {{ c.publicada }} nas mesmas transações</h2>
+<p class="ajuda">O teste são as {{ c.nova.transacoes }} transações mais recentes da API
+  {% if m.periodos %}({{ m.periodos.teste.inicio }} a {{ m.periodos.teste.fim }}){% endif %}, que nenhuma das versões usou para treinar.</p>
+<div class="rolagem"><table class="estreita">
+  <thead><tr><th>Medida</th><th class="num">Versão {{ c.publicada }} (em uso quando treinou)</th><th class="num">Versão {{ v.numero }}</th></tr></thead>
+  <tbody>
+    <tr><td>Fraudes apanhadas (recall)</td><td class="num">{{ c.anterior.recall | pct }}</td><td class="num">{{ c.nova.recall | pct }}</td></tr>
+    <tr><td>Alertas que eram fraude (precisão)</td><td class="num">{{ c.anterior.precisao | pct }}</td><td class="num">{{ c.nova.precisao | pct }}</td></tr>
+    <tr><td>Alertas</td><td class="num">{{ c.anterior.alertas }}</td><td class="num">{{ c.nova.alertas }}</td></tr>
+    <tr class="destaque"><td>F1</td><td class="num">{{ c.anterior.f1 | decimal(3) }}</td><td class="num">{{ c.nova.f1 | decimal(3) }}</td></tr>
+  </tbody>
+</table></div>
+{% if c.nova.f1 > c.anterior.f1 %}<p class="sucesso">A versão {{ v.numero }} é melhor nas transações recentes.</p>
+{% else %}<p class="erro">A versão {{ v.numero }} não é melhor do que a {{ c.publicada }} nas transações recentes: pense bem antes de a publicar.</p>{% endif %}
+
+<h3>Fraudes apanhadas por tipo</h3>
+<div class="rolagem"><table class="estreita">
+  <thead><tr><th>Tipo</th><th class="num">Versão {{ c.publicada }}</th><th class="num">Versão {{ v.numero }}</th></tr></thead>
+  <tbody>{% for tipo, nome in tipos.items() if tipo in c.recall_por_tipo.nova %}
+    <tr><td>{{ nome }}</td><td class="num">{{ c.recall_por_tipo.anterior.get(tipo) | pct }}</td>
+      <td class="num">{{ c.recall_por_tipo.nova.get(tipo) | pct }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+{% if m.dados and m.dados.api is defined %}
+<h2 class="separado">Dados usados</h2>
+<ul class="lista-simples">
+  <li>{{ m.dados.transacoes }} transações de {{ m.dados.clientes }} clientes, {{ m.dados.fraudes }} fraudes.</li>
+  <li>{{ m.dados.api }} recebidas pela API: {{ m.dados.rotulos_analista }} com a decisão do analista como rótulo
+    ({{ m.dados.corrigidos_pelo_analista }} corrigiram o gerador) e {{ m.dados.rotulos_gerador }} com o rótulo do gerador.</li>
+  {% if m.periodos %}{% for nome, p in m.periodos.items() %}
+  <li>{{ periodos[nome] }}: {{ p.inicio }} a {{ p.fim }}, {{ p.transacoes }} transações, {{ p.fraudes }} fraudes.</li>
+  {% endfor %}{% endif %}
+</ul>
+{% endif %}
+
+{% if v.estado in ('candidata', 'anterior') and utilizador.pode('supervisor') %}
+<form method="post" action="/modelos/versoes/{{ v.numero }}/publicar" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="principal">{{ 'Publicar a versão ' ~ v.numero if v.estado == 'candidata' else 'Voltar à versão ' ~ v.numero }}</button>
+  <span class="ajuda">As transações seguintes passam a ser avaliadas por ela. Pode voltar à versão atual a qualquer momento.</span>
+</form>
+{% endif %}
+{% endblock %}

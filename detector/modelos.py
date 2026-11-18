@@ -63,28 +63,45 @@ class Detector:
             "anomalia_bruta": -self.isolation.score_samples(dados),
         }, index=X.index)
 
-    def avaliar(self, X: pd.DataFrame) -> pd.DataFrame:
+    def avaliar(self, X: pd.DataFrame, cortes=None) -> pd.DataFrame:
+        """`cortes` (detector.limiares.Cortes) muda os limites na escala 0-100; por omissão, 50 e 50,
+        que correspondem exatamente aos limiares escolhidos na validação."""
         p = self.pontuacoes(X)
         limiar = self.limiares[self.escolhido]
-        alerta_c = p["prob"].to_numpy() >= limiar
+        risco = para_escala(p["prob"], limiar)
+        anomalia = para_escala(p["anomalia_bruta"], self.limiar_anomalia)
+        corte_risco = 50.0 if cortes is None else float(cortes.risco)
+        corte_anomalia = 50.0 if cortes is None else float(cortes.anomalia)
+        if corte_risco == 50.0:  # sem arredondamentos: o mesmo que prob >= limiar
+            alerta_c = p["prob"].to_numpy() >= limiar
+        else:
+            alerta_c = risco >= corte_risco
         # Sem histórico não há comportamento habitual com que comparar: a anomalia não gera alerta.
         com_historico = X["historico_curto"].to_numpy() == 0
-        alerta_a = (p["anomalia_bruta"].to_numpy() >= self.limiar_anomalia) & com_historico
+        if corte_anomalia == 50.0:
+            alerta_a = (p["anomalia_bruta"].to_numpy() >= self.limiar_anomalia) & com_historico
+        else:
+            alerta_a = (anomalia >= corte_anomalia) & com_historico
         return pd.DataFrame({
             "prob": p["prob"],
-            "risco": para_escala(p["prob"], limiar).round(1),
-            "anomalia": para_escala(p["anomalia_bruta"], self.limiar_anomalia).round(1),
+            "risco": risco.round(1),
+            "anomalia": anomalia.round(1),
             "alerta_classificador": alerta_c,
             "alerta_anomalia": alerta_a,
             "nivel": np.where(alerta_c, NIVEIS[0], np.where(alerta_a, NIVEIS[1], NIVEIS[2])),
         }, index=X.index)
 
 
-def treinar(X_treino: pd.DataFrame, y_treino: np.ndarray, X_val: pd.DataFrame, y_val: np.ndarray) -> tuple[Detector, dict]:
-    """Treina com o treino e decide limiares e modelo com a validação. O teste não entra aqui."""
+def treinar(X_treino: pd.DataFrame, y_treino: np.ndarray, X_val: pd.DataFrame, y_val: np.ndarray,
+            pesos: np.ndarray | None = None) -> tuple[Detector, dict]:
+    """Treina com o treino e decide limiares e modelo com a validação. O teste não entra aqui.
+
+    `pesos` (um por linha do treino) dá mais importância a algumas transações, como as recentes no re-treino.
+    """
     classificadores, limiares, validacao = criar_classificadores(), {}, {}
+    extra = {} if pesos is None else {"modelo__sample_weight": np.asarray(pesos, dtype=float)}
     for nome, modelo in classificadores.items():
-        modelo.fit(X_treino[FEATURES], y_treino)
+        modelo.fit(X_treino[FEATURES], y_treino, **extra)
         prob = modelo.predict_proba(X_val[FEATURES])[:, 1]
         limiares[nome] = melhor_limiar(y_val, prob)
         validacao[nome] = metricas(y_val, prob, limiares[nome])

@@ -11,7 +11,7 @@ import secrets
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 import pandas as pd
 from sqlalchemy import select, update
@@ -30,12 +30,12 @@ def _agora() -> datetime:
 
 
 def analisar_ficheiro(artefatos, sessoes: sessionmaker, cfg, transacoes: pd.DataFrame, nome_ficheiro: str,
-                      utilizador_id: int | None) -> tuple[str, int, int]:
+                      utilizador_id: int | None, cortes=None) -> tuple[str, int, int]:
     """Avalia, grava a análise e os alertas e avisa por e-mail. Devolve (chave, transações, alertas)."""
-    resultado = avaliar_transacoes(artefatos, transacoes)
+    resultado = avaliar_transacoes(artefatos, transacoes, cortes=cortes)
     resultado = resultado.sort_values("risco", ascending=False, kind="stable").reset_index(drop=True)
     chave = repositorio.guardar_analise(sessoes, resultado, "ficheiro", artefatos.detector.escolhido, nome_ficheiro,
-                                        utilizador_id, gerar_alertas=True)
+                                        utilizador_id, gerar_alertas=True, versao_modelo=artefatos.versao)
     n_alertas = int((resultado["nivel"] != "Normal").sum())
     correio.avisar_alertas(cfg, nome_ficheiro[:200], int((resultado["nivel"] == "Alto risco").sum()), n_alertas)
     registo.info("Ficheiro '%s' analisado: %d transações, %d com alerta", nome_ficheiro, len(resultado), n_alertas)
@@ -45,6 +45,7 @@ def analisar_ficheiro(artefatos, sessoes: sessionmaker, cfg, transacoes: pd.Data
 class FilaTarefas:
     def __init__(self, sessoes: sessionmaker, pasta: Path, obter_artefatos: Callable, cfg):
         self.sessoes, self.pasta, self.obter_artefatos, self.cfg = sessoes, Path(pasta), obter_artefatos, cfg
+        self.obter_cortes: Callable = lambda: None  # a aplicação liga aqui os limiares em vigor
         self._fila: queue.Queue[str] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._trinco = threading.Lock()
@@ -124,7 +125,8 @@ class FilaTarefas:
                 raise RuntimeError("os modelos não estão carregados")
             transacoes = validar(ler_csv(caminho.read_bytes()))
             analise, total, n_alertas = analisar_ficheiro(artefatos, self.sessoes, self.cfg, transacoes,
-                                                          tarefa.nome_ficheiro, tarefa.utilizador_id)
+                                                          tarefa.nome_ficheiro, tarefa.utilizador_id,
+                                                          self.obter_cortes())
         except (ValueError, RuntimeError, OSError) as exc:
             registo.error("Ficheiro '%s' não foi analisado: %s", tarefa.nome_ficheiro, exc)
             self._mudar(chave, estado="falhou", concluida_em=_agora(), erro=str(exc)[:1000])
