@@ -11,7 +11,7 @@
 </table>
 
 <h2 class="separado">Depósito</h2>
-<form method="post" action="/balcao/clientes/{{ c.id }}/deposito" class="envio">
+<form method="post" action="/balcao/clientes/{{ c.id }}/deposito" class="envio" data-envio-unico>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="1 500,00"></label>
   <label>Descrição (opcional) <input name="descricao" maxlength="140" autocomplete="off"></label>
@@ -19,7 +19,7 @@
 </form>
 
 <h2 class="separado">Levantamento</h2>
-<form method="post" action="/balcao/clientes/{{ c.id }}/levantamento" class="envio">
+<form method="post" action="/balcao/clientes/{{ c.id }}/levantamento" class="envio" data-envio-unico>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="500,00"></label>
   <label>Cidade
@@ -69,4 +69,14 @@
   <button type="submit" class="principal">Gravar alterações</button>
 </form>
 <p><a href="/balcao/clientes">Voltar à lista</a></p>
+<script>
+  document.querySelectorAll('form[data-envio-unico]').forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      if (f.dataset.enviado) { e.preventDefault(); return; }
+      f.dataset.enviado = '1';
+      var b = f.querySelector('button[type=submit]');
+      if (b) { setTimeout(function () { b.disabled = true; }, 0); }
+    });
+  });
+</script>
 {% endblock %}

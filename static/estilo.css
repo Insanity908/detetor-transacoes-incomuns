@@ -120,6 +120,8 @@ table.estreita { max-width: 32rem; }
   border-radius: .6rem; background: var(--alto); color: #fff; font-size: .7rem; font-weight: 700; line-height: 1.15rem; text-align: center; }
 .aviso { padding: .6rem .9rem; border-radius: 3px; border: 1px solid; margin: 0 0 1rem; font-weight: 600; }
 .aviso-sucesso { color: var(--normal); border-color: var(--normal); background: #edf6f0; }
+.aviso-retido { color: #fff; border: 3px solid var(--alto); background: var(--alto); font-size: 1.15rem; font-weight: 700; padding: .9rem 1.1rem; }
+.aviso-retido strong { text-decoration: underline; text-transform: uppercase; }
 .aviso-erro { color: var(--alto); border-color: var(--alto); background: #fbeeed; }
 .separadores { display: flex; flex-wrap: wrap; gap: .25rem; border-bottom: 2px solid var(--linha); margin: 1rem 0; }
 .separadores a { padding: .45rem .8rem; color: var(--tinta-suave); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -2px; }

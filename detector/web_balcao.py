@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from flask import Flask, abort, current_app, flash, redirect, render_template, request, url_for
+from markupsafe import Markup
 from sqlalchemy.orm import sessionmaker
 
 from . import acesso, clientes, contas_bancarias
@@ -126,7 +127,8 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         if d.estado == "autorizado":
             flash("Levantamento autorizado. Entregue o dinheiro.", "sucesso")
         elif d.estado == "retido":
-            flash("Em verificação. Não entregue o dinheiro até a equipa de fraude decidir.", "erro")
+            flash(Markup("Em verificação. <strong>Não entregue o dinheiro</strong> até a equipa de fraude decidir."),
+                  "retido")
         else:
             flash(d.motivo or "Levantamento recusado.", "erro")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))

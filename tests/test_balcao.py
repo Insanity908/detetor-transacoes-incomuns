@@ -236,3 +236,17 @@ def test_levantamento_sem_modelos_da_503(tmp_path):
     r = c.post("/balcao/clientes/1/levantamento", data={"valor": "10"})
     assert r.status_code == 503
     assert "O detetor ainda não está pronto: não é possível fazer levantamentos." in r.get_data(as_text=True)
+
+
+def test_levantamento_retido_aviso_destacado(app_balcao, cliente_balcao, monkeypatch):
+    _forcar_nivel(monkeypatch, "Alto risco", 90.0)
+    _com_saldo(cliente_balcao)
+    pagina = _levantar(cliente_balcao).get_data(as_text=True)
+    assert "<strong>Não entregue o dinheiro</strong>" in pagina
+    assert "aviso-retido" in pagina
+
+
+def test_formularios_de_dinheiro_desativam_ao_enviar(cliente_balcao):
+    _novo(cliente_balcao)
+    pagina = cliente_balcao.get("/balcao/clientes/1").get_data(as_text=True)
+    assert pagina.count("data-envio-unico") >= 2
