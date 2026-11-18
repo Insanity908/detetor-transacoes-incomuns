@@ -16,7 +16,7 @@ import pandas as pd
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask.logging import default_handler
 
-from detector import acesso, api, limiares, repositorio, tarefas, versoes, web_alertas, web_api, web_balcao, web_modelos
+from detector import acesso, acesso_cliente, api, limiares, repositorio, tarefas, versoes, web_alertas, web_api, web_balcao, web_modelos
 from detector.acesso import auditar, utilizador_atual
 from detector.artefatos import carregar
 from detector.banco import criar_fabrica_sessoes, criar_motor, descrever, migrar, verificar_ligacao
@@ -38,7 +38,7 @@ VERSAO = "1.5.0"
 # Páginas que funcionam sem modelos treinados: contas, utilizadores e auditoria.
 SEM_MODELOS = frozenset({"static", "saude", "entrar", "entrar_post", "sair", "senha", "senha_post", "utilizadores",
                          "utilizadores_post", "utilizador", "utilizador_post", "utilizador_senha", "ver_auditoria",
-                         *web_alertas.ENDPOINTS, *web_api.ENDPOINTS, *web_balcao.ENDPOINTS, *web_modelos.SEM_MODELOS, "tarefa"})
+                         *web_alertas.ENDPOINTS, *web_api.ENDPOINTS, *web_balcao.ENDPOINTS, *acesso_cliente.ENDPOINTS, *web_modelos.SEM_MODELOS, "tarefa"})
 GRAFICOS = ("matriz_confusao.png", "importancia.png", "comparacao.png")
 INICIO_FORMULA = ("=", "+", "-", "@")
 INICIO_PERIGOSO = ("\t", "\r")
@@ -153,6 +153,7 @@ def criar_app(pasta_modelos: Path | None = None, configuracao: Configuracao | No
         g.inicio = time.perf_counter()
 
     acesso.instalar(app, sessoes, registo, cfg.sessao_horas, cfg.producao)  # login, perfis, CSRF e auditoria
+    acesso_cliente.instalar(app, sessoes, registo)  # entrada e sessão do cliente (/cliente/)
     web_alertas.instalar(app, sessoes)  # fila de alertas, painel e notificações
     web_balcao.instalar(app, sessoes)  # clientes, fichas e depósitos do balcão
     api.instalar(app)  # API REST v1 (chaves, limite de pedidos)

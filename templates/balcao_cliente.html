@@ -38,6 +38,14 @@
   {% endif %}
 </form>
 
+<h2 class="separado">Acesso do cliente</h2>
+<p class="ajuda">{% if tem_acesso %}O cliente já tem acesso à área do cliente. Redefinir a senha termina as sessões abertas.{% else %}O cliente ainda não tem acesso à área do cliente.{% endif %} Entra com o código {{ c.codigo }} e muda a senha na primeira vez.</p>
+<form method="post" action="/balcao/clientes/{{ c.id }}/acesso" class="envio" data-envio-unico>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Senha provisória <input name="senha" type="password" required autocomplete="new-password"></label>
+  <button type="submit" class="secundario">{% if tem_acesso %}Redefinir acesso{% else %}Criar acesso{% endif %}</button>
+</form>
+
 <h2 class="separado">Extrato</h2>
 {% if extrato %}
 <div class="rolagem"><table>

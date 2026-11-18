@@ -1,0 +1,19 @@
+{% extends "base_cliente.html" %}
+{% block titulo %}Entrar · Banco Demonstração{% endblock %}
+{% block conteudo %}
+<section class="cartao-entrada" aria-labelledby="titulo-entrada">
+  <h1 id="titulo-entrada">Entrar</h1>
+  <p class="ajuda">Use o seu código de cliente e a senha que recebeu no balcão.</p>
+  <form method="post" action="/cliente/entrar" class="pilha">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Código de cliente
+      <input name="codigo" value="{{ codigo }}" required autocomplete="username" autocapitalize="characters" autofocus>
+    </label>
+    <label>Senha
+      <input name="senha" type="password" required autocomplete="current-password">
+    </label>
+    {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+    <button type="submit" class="principal">Entrar</button>
+  </form>
+</section>
+{% endblock %}

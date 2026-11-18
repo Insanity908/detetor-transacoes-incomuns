@@ -86,6 +86,11 @@ def impressao(u) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()[:32]
 
 
+def e_area_cliente(caminho: str) -> bool:
+    """As páginas /cliente/ têm a sua própria sessão e o seu próprio filtro (detector/acesso_cliente.py)."""
+    return caminho == "/cliente" or caminho.startswith("/cliente/")
+
+
 def _guardar_na_sessao(u) -> None:
     session.update(uid=u.id, versao=u.versao_sessao, conta=impressao(u))
 
@@ -131,6 +136,8 @@ def instalar(app: Flask, sessoes: sessionmaker, registo: Logger, horas_sessao: i
     def _identificar():
         g.utilizador = None
         if request.path.startswith("/api/v1/"):  # a API autentica-se por chave (detector/api.py), nunca pela sessão
+            return None
+        if e_area_cliente(request.path):  # a área do cliente tem o seu próprio filtro
             return None
         uid = session.get("uid")
         if uid is not None:

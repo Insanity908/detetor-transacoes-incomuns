@@ -45,6 +45,13 @@ ACOES = {
     "conta_bancaria_desbloqueada": "Desbloqueou conta bancária",
     "movimento_executado": "Executou movimento retido",
     "movimento_cancelado": "Cancelou movimento retido",
+    "acesso_cliente_criado": "Criou o acesso de um cliente",
+    "senha_cliente_redefinida": "Redefiniu a senha de um cliente",
+    "entrada_cliente": "Cliente entrou na área do cliente",
+    "entrada_cliente_falhada": "Cliente: tentativa de entrada falhada",
+    "acesso_cliente_bloqueado": "Acesso de cliente bloqueado por tentativas falhadas",
+    "saida_cliente": "Cliente saiu da área do cliente",
+    "senha_cliente_alterada": "Cliente alterou a própria senha",
 }
 POR_PAGINA = 50
 

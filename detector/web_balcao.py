@@ -7,7 +7,7 @@ from flask import Flask, abort, current_app, flash, redirect, render_template, r
 from markupsafe import Markup
 from sqlalchemy.orm import sessionmaker
 
-from . import acesso, clientes, contas_bancarias
+from . import acesso, acesso_cliente, clientes, contas_bancarias
 from .autorizacao import PedidoDebito, autorizar
 from .acesso import auditar, exige_area, utilizador_atual
 from .dinheiro import de_centavos, para_centavos
@@ -16,7 +16,7 @@ from .gerador import CATEGORIA_LEVANTAMENTO, CIDADES
 
 ENDPOINTS = frozenset({"balcao_clientes", "balcao_cliente_novo", "balcao_cliente_novo_post", "balcao_cliente",
                        "balcao_cliente_editar", "balcao_cliente_deposito", "balcao_cliente_bloquear",
-                       "balcao_cliente_levantamento"})
+                       "balcao_cliente_levantamento", "balcao_cliente_acesso"})
 acesso.ENDPOINTS_BALCAO.update(ENDPOINTS)
 NOMES_TIPO = {"deposito": "Depósito", "levantamento": "Levantamento", "compra": "Compra",
               "transferencia_enviada": "Transferência enviada", "transferencia_recebida": "Transferência recebida"}
@@ -42,7 +42,8 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
 
     def _ficha(c, erro=None, estado=200):
         return render_template("balcao_cliente.html", c=c, conta=c.conta, erro=erro,
-                               extrato=contas_bancarias.extrato(sessoes, c.conta.id)), estado
+                               extrato=contas_bancarias.extrato(sessoes, c.conta.id),
+                               tem_acesso=acesso_cliente.obter_acesso(sessoes, c.id) is not None), estado
 
     @app.get("/balcao/clientes")
     @exige_area("balcao")
@@ -131,6 +132,19 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
                   "retido")
         else:
             flash(d.motivo or "Levantamento recusado.", "erro")
+        return redirect(url_for("balcao_cliente", cliente_id=c.id))
+
+    @app.post("/balcao/clientes/<int:cliente_id>/acesso")
+    @exige_area("balcao")
+    def balcao_cliente_acesso(cliente_id):
+        c = _cliente(cliente_id)
+        try:
+            novo = acesso_cliente.criar_ou_redefinir(sessoes, c.id, request.form.get("senha", ""))
+        except ValueError as exc:
+            return _ficha(c, str(exc), 400)
+        auditar("acesso_cliente_criado" if novo else "senha_cliente_redefinida", alvo=c.codigo)
+        flash("Acesso criado. O cliente muda a senha ao entrar." if novo
+              else "Senha redefinida. O cliente muda-a ao entrar e as sessões abertas terminaram.", "sucesso")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))
 
     @app.post("/balcao/clientes/<int:cliente_id>/bloquear")

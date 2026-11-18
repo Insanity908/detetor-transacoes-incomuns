@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Banco Demonstração{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+  {% block cabeca %}{% endblock %}
+</head>
+<body>
+  <header>
+    <div class="moldura">
+      <p class="marca">Banco Demonstração</p>
+      {% if cliente_atual %}
+      <div class="conta">
+        <span>{{ cliente_atual.nome }} <small>{{ cliente_atual.codigo }}</small></span>
+        <a href="/cliente/senha">Senha</a>
+        <form method="post" action="/cliente/sair">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ligacao">Sair</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  <main class="moldura">
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% for categoria, mensagem in mensagens %}<p class="aviso aviso-{{ categoria }}" role="{{ 'alert' if categoria == 'erro' else 'status' }}">{{ mensagem }}</p>{% endfor %}
+    {% endwith %}
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>
