@@ -44,7 +44,10 @@ def ler(sessoes: sessionmaker) -> tuple[Cortes, Ajuste | None]:
     if ajuste is None:
         return Cortes(), None
     try:
-        return Cortes(**json.loads(ajuste.valor)), ajuste
+        dados = json.loads(ajuste.valor)
+        if "recusa" not in dados:  # gravado antes do corte de recusa: 95, ou o risco se este for mais alto
+            dados["recusa"] = max(95.0, float(dados.get("risco", 50)))
+        return Cortes(**dados), ajuste
     except (ValueError, TypeError):
         return Cortes(), ajuste
 

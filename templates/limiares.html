@@ -46,7 +46,7 @@
   <input type="hidden" name="risco" value="{{ proposta.risco | int }}">
   <input type="hidden" name="anomalia" value="{{ proposta.anomalia | int }}">
   <input type="hidden" name="recusa" value="{{ proposta.recusa | int }}">
-  <button type="submit" class="principal">Gravar risco {{ proposta.risco | int }} e anomalia {{ proposta.anomalia | int }}</button>
+  <button type="submit" class="principal">Gravar risco {{ proposta.risco | int }}, anomalia {{ proposta.anomalia | int }} e recusa {{ proposta.recusa | int }}</button>
   <span class="ajuda">Vale para as transações avaliadas a partir de agora; as anteriores ficam como estão.</span>
 </form>
 {% endif %}

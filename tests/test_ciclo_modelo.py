@@ -72,7 +72,7 @@ def test_efeito_dos_cortes():
 def test_supervisor_ajusta_os_limiares(app):
     chefe = criar_cliente(app, "supervisor", "chefe")
     html = chefe.get("/modelos/limiares?risco=70&anomalia=60").get_data(as_text=True)
-    assert "Gravar risco 70 e anomalia 60" in html
+    assert "Gravar risco 70, anomalia 60 e recusa 95" in html
     r = chefe.post("/modelos/limiares", data={"risco": "70", "anomalia": "60"}, follow_redirects=True)
     assert "Limiares gravados" in r.get_data(as_text=True)
     assert app.config["CORTES"] == limiares.Cortes(70, 60) == limiares.ler(_sessoes(app))[0]
@@ -337,6 +337,16 @@ def test_ajuste_antigo_sem_recusa_le_se_com_95(app):
         s.merge(Ajuste(chave=limiares.CHAVE, valor=json.dumps({"risco": 60.0, "anomalia": 40.0}),
                        alterado_em=datetime.now(), alterado_por="x"))
     assert limiares.ler(_sessoes(app))[0] == limiares.Cortes(60, 40, 95)
+
+
+def test_ajuste_antigo_com_risco_alto_nao_volta_ao_padrao(app):
+    import json
+    from datetime import datetime
+    from detector.banco import Ajuste
+    with _sessoes(app).begin() as s:
+        s.merge(Ajuste(chave=limiares.CHAVE, valor=json.dumps({"risco": 97.0, "anomalia": 40.0}),
+                       alterado_em=datetime.now(), alterado_por="x"))
+    assert limiares.ler(_sessoes(app))[0] == limiares.Cortes(97, 40, 97)
 
 
 def test_recusa_nao_pode_ser_inferior_ao_risco():
