@@ -186,6 +186,7 @@ def test_area_do_cliente_funciona_sem_modelos(tmp_path, cli_sem_modelos=None):
 from pathlib import Path
 
 from detector import autorizacao
+from detector.contas_bancarias import verificar_saldos
 from detector.auditoria import ACOES
 from detector.configuracao import ler_configuracao
 
@@ -259,17 +260,19 @@ def test_movimento_recebido_mostra_numero_e_nunca_o_nome(app, sessoes, cli, outr
 def test_transferencia_normal_conclui_e_move_saldos(app, sessoes, cli, outro, acesso, monkeypatch):
     _depositar(sessoes, cli, 100_000)
     _forcar_nivel(monkeypatch, "Normal", 5.0)
-    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,50"})
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,50"}, follow_redirects=True)
     assert r.status_code == 200 and "Concluída" in r.get_data(as_text=True)
     assert _saldos(sessoes, cli, outro) == [(74_950, 0), (25_050, 0)]
+    assert verificar_saldos(sessoes) == []
 
 
 def test_transferencia_retida_fica_em_verificacao(app, sessoes, cli, outro, acesso, monkeypatch):
     _depositar(sessoes, cli, 100_000)
     _forcar_nivel(monkeypatch, "Alto risco", 90.0)
-    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,00"})
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,00"}, follow_redirects=True)
     assert "Em verificação" in r.get_data(as_text=True)
     assert _saldos(sessoes, cli, outro) == [(100_000, 25_000), (0, 0)]
+    assert verificar_saldos(sessoes) == []
 
 
 @pytest.mark.parametrize("destino,trecho", [("PROPRIA", "própria conta"), ("000000000", "não encontrada")])
@@ -277,10 +280,11 @@ def test_destino_proprio_ou_inexistente_e_recusado(app, sessoes, cli, acesso, mo
     _depositar(sessoes, cli, 100_000)
     _forcar_nivel(monkeypatch, "Normal", 5.0)
     numero = cli.conta.numero if destino == "PROPRIA" else destino
-    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": numero, "valor": "10,00"})
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": numero, "valor": "10,00"}, follow_redirects=True)
     html = r.get_data(as_text=True)
     assert "Recusada" in html and trecho in html
     assert _saldos(sessoes, cli) == [(100_000, 0)]
+    assert verificar_saldos(sessoes) == []
 
 
 def test_valor_invalido_da_400_com_mensagem(app, cli, outro, acesso, monkeypatch):
@@ -396,3 +400,19 @@ def test_modo_demonstracao_na_configuracao(monkeypatch):
     monkeypatch.setenv("AMBIENTE", "desenvolvimento")
     monkeypatch.setenv("MODO_DEMONSTRACAO", "não")
     assert ler_configuracao(None).modo_demonstracao is False
+
+
+def test_transferencia_redireciona_e_atualizar_nao_repete(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    c = _sessao(app, cli)
+    r = c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00"})
+    assert r.status_code == 303 and "/cliente/movimentos/" in r.headers["Location"]
+    antes = len(contas_bancarias.extrato(sessoes, cli.conta.id))
+    for _ in range(2):  # atualizar a página de destino é um GET
+        seguida = c.get(r.headers["Location"])
+        assert seguida.status_code == 200
+    assert "Concluída" in seguida.get_data(as_text=True)
+    assert len(contas_bancarias.extrato(sessoes, cli.conta.id)) == antes
+    assert _saldos(sessoes, cli, outro) == [(99_000, 0), (1_000, 0)]
+    assert verificar_saldos(sessoes) == []

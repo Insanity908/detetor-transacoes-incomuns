@@ -38,7 +38,7 @@ class Configuracao:
     url_publica: str = ""
     pasta_envios: Path = RAIZ / "instancia" / "envios"  # ficheiros à espera do processamento em segundo plano
     linhas_segundo_plano: int = 2000  # a partir daqui, o ficheiro é analisado em segundo plano
-    modo_demonstracao: bool = True  # área do cliente: campo "a partir de" na transferência (só para apresentações)
+    modo_demonstracao: bool = False  # área do cliente: campo "a partir de" na transferência (só para apresentações)
 
     @property
     def email_ativo(self) -> bool:

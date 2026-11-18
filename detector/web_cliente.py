@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Flask, abort, current_app, g, render_template, request
+from flask import Flask, abort, current_app, flash, g, redirect, render_template, request, url_for
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
@@ -107,6 +107,9 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         acesso.auditar("transferencia_cliente", alvo=c.codigo, nome_utilizador=f"cliente:{c.codigo}",
                        detalhe=f"para {valores['conta_destino']}; {valor} cêntimos; {d.estado}"
                                + (f"; {d.motivo}" if d.motivo else ""))
-        resultado = {"texto": estado_texto("transferencia_enviada", d.estado, d.motivo), "estado": d.estado,
-                     "movimento_id": d.movimento_id or None}
+        texto = estado_texto("transferencia_enviada", d.estado, d.motivo)
+        if d.movimento_id:  # post/redirect/get: atualizar a página não repete a transferência
+            flash(texto, {"autorizado": "sucesso", "retido": "retido"}.get(d.estado, "erro"))
+            return redirect(url_for("cliente_movimento", movimento_id=d.movimento_id), 303)
+        resultado = {"texto": texto, "estado": d.estado, "movimento_id": None}
         return _pagina({"cidade": valores.get("cidade"), "pais": valores.get("pais")}, None, resultado)
