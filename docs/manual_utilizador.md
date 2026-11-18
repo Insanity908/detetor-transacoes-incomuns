@@ -8,9 +8,10 @@ fraude ou falso alarme.
 
 | Perfil | O que pode fazer |
 |---|---|
+| **Balcão** | Só a área **Clientes**: criar e pesquisar clientes (a conta abre-se com a ficha), editar telefone, e-mail, morada e cidade, depositar, levantar, bloquear ou desbloquear a conta e criar o acesso do cliente. Não abre nenhuma página de alertas. |
 | **Analista** | Trabalhar alertas (assumir, investigar, comentar, decidir), testar transações, analisar ficheiros, ver perfis de clientes e o estado dos modelos. Vê os alertas novos e os seus, e só as suas análises. |
 | **Supervisor** | Tudo o que o analista faz, e ainda: ver todos os alertas e análises, atribuir e reabrir alertas, o **Painel** de indicadores, a **Auditoria**, ajustar os **limiares** e treinar e publicar **versões do modelo**. |
-| **Administrador** | Tudo o que o supervisor faz, e ainda gerir **Utilizadores** e as **chaves da API**. |
+| **Administrador** | Tudo o que o supervisor e o balcão fazem, e ainda gerir **Utilizadores** e as **chaves da API**. |
 
 ## Entrar e sair
 
@@ -19,6 +20,34 @@ fraude ou falso alarme.
 - Depois de 5 tentativas erradas seguidas, a conta fica bloqueada 15 minutos.
 - A sessão termina sozinha ao fim de 8 horas (configurável). Use **Sair**, no canto superior direito, ao terminar.
 - **Senha**, no mesmo canto, muda a sua senha; as suas outras sessões abertas terminam.
+
+## Balcão: clientes, depósitos e levantamentos
+
+Em **Clientes** pesquise por nome, código ou número de conta. **Novo cliente** regista a ficha (nome, data de
+nascimento, documento, telefone, cidade e morada) e abre a conta com o saldo a zero. A ficha mostra o saldo, o
+extrato e o que pode fazer:
+
+- **Depósito**: o valor entra logo na conta. Cada formulário só envia uma vez, mesmo com cliques repetidos.
+- **Levantamento**: o detetor avalia o pedido **antes** de o dinheiro sair. Se for autorizado, entregue o dinheiro.
+  Se aparecer o aviso **Em verificação**, **não entregue o dinheiro**: a equipa de fraude decide. Sem saldo
+  disponível, ou com risco muito alto, o levantamento é recusado.
+- **Bloquear conta**: a conta bloqueada não recebe nem envia dinheiro, e o cliente deixa de entrar.
+- **Acesso do cliente**: crie ou redefina a senha temporária; o cliente muda-a na primeira entrada.
+
+## Área do cliente
+
+O cliente entra em `/cliente/entrar` com o código (por exemplo `C0001`) e a senha. Esta área é separada da da
+equipa: tem sessão própria e outra aparência ("Banco Demonstração"). Depois de 5 senhas erradas, o acesso fica
+bloqueado durante 15 minutos.
+
+- **Início**: o **saldo**, o **disponível** (o saldo menos o que está em verificação), o valor **em verificação** e
+  os últimos movimentos, cada um com o estado: **Concluída**, **Em verificação** ou **Recusada** (com o motivo).
+- **Fazer uma transferência**: indique o número da conta de destino, o valor e, se quiser, uma descrição. O
+  resultado aparece logo. Pode ser recusada (sem saldo, destino inexistente ou bloqueado, ou a própria conta) ou
+  ficar **em verificação**: o valor sai do disponível, mas o saldo só muda quando a equipa decide.
+  Em modo demonstração há ainda **A partir de** (cidade e país), para simular uma transferência feita de outro local.
+- **Senha** muda a senha e **Sair** termina a sessão. Os movimentos recebidos mostram o número da conta de origem,
+  nunca o nome de quem enviou.
 
 ## Níveis de risco
 
@@ -46,7 +75,9 @@ Os alertas chegam de duas fontes: os ficheiros analisados e as transações envi
 3. **Investigar.** A ficha mostra a transação, os motivos, os outros alertas do mesmo cliente e uma ligação para o
    **perfil do cliente** (valor habitual, horários, cidades, países e categorias). Registe o que verificou em
    **Comentários**; tudo fica no **histórico** do alerta.
-4. **Decidir.** Escolha **Fraude confirmada** ou **Falso alarme**, escreva a justificação (obrigatória) e clique
+4. **Decidir.** Se o alerta vem de uma saída de dinheiro do banco (compra, levantamento ou transferência), o valor
+   está retido até decidir: **Falso alarme** executa o movimento e **Fraude confirmada** cancela-o e repõe o saldo
+   disponível. Reabrir um alerta não volta a mexer no dinheiro. Escolha **Fraude confirmada** ou **Falso alarme**, escreva a justificação (obrigatória) e clique
    **Encerrar alerta**. Se não for consigo, use **Devolver à fila**.
 
 As decisões servem também para treinar as próximas versões do modelo: são o rótulo mais fiável que o sistema tem.
@@ -86,7 +117,8 @@ de hábitos, os supervisores veem um aviso em todas as páginas.
 ## Para supervisores
 
 ### Painel
-Alertas criados por dia, taxa de falsos alarmes, valor em risco nos alertas abertos, tempo médio e mediano até
+Alertas criados por dia, taxa de falsos alarmes, valor em risco nos alertas abertos, **valor retido** (dinheiro
+ainda por decidir) e **valor protegido** (cancelado por fraude ou recusado por risco no período), tempo médio e mediano até
 à decisão, e o trabalho de cada pessoa. Escolha 7, 30 ou 90 dias.
 
 ### Auditoria
@@ -97,7 +129,8 @@ nem apagar registos.
 ### Limiares de alerta
 Em **Modelos → Ajustar** escolha os limites de risco e de anomalia (1 a 99). Antes de gravar, a tabela mostra o
 efeito no teste da versão em uso: alertas por mil transações, fraudes apanhadas e falsos alarmes. Subir os limites
-dá menos alertas e menos falsos alarmes, mas deixa passar mais fraudes. Os novos limites valem para as transações
+dá menos alertas e menos falsos alarmes, mas deixa passar mais fraudes. O limite de **recusa** (95 por omissão, nunca abaixo do de risco) é o risco a partir do qual o banco recusa a
+operação sem esperar pela equipa. Os novos limites valem para as transações
 avaliadas a partir desse momento.
 
 ### Treinar e publicar uma versão nova

@@ -71,6 +71,31 @@ um novo modelo é treinado e publicado pela interface e o desempenho volta a sub
 
 **Concluída quando:** cada alteração é testada automaticamente e qualquer pessoa consegue instalar o sistema seguindo o manual.
 
+## Fase 7 — Clientes, contas e balcão
+**Objetivo:** o sistema ganha um banco de demonstração por baixo do detetor.
+- Migração 0006, perfil **Balcão** e permissões por área, fichas e contas, depósitos, clientes sintéticos com conta,
+  extrato no ecrã e auditoria.
+
+**Concluída quando:** um funcionário de balcão cria um cliente, abre-lhe a conta, deposita, e o saldo bate com os
+movimentos; o balcão não abre nenhuma página de alertas.
+
+## Fase 8 — Autorização antes do movimento
+**Objetivo:** cada saída de dinheiro é avaliada pelo detetor antes de mexer no saldo.
+- `autorizar()`, levantamentos e compras pela API a debitar contas, retenção e reserva, decisão do analista a
+  executar ou cancelar, corte de recusa automática, gerador com transferências e levantamentos e re-treino, painel
+  com valor retido e protegido.
+
+**Concluída quando:** com o simulador ligado, as compras debitam contas, uma compra de alto risco fica retida, e o
+analista a liberta ou cancela com o saldo certo no fim.
+
+## Fase 9 — Área do cliente e cena de demonstração
+**Objetivo:** mostrar o sistema pelos olhos do cliente e do banco, de ponta a ponta.
+- Login de cliente, saldo, movimentos, transferências, modo demonstração ("a partir de"), salário no simulador e
+  manuais atualizados com um guião da demonstração (`docs/guiao_demonstracao.md`, testado por `tests/test_guiao.py`).
+
+**Concluída quando:** o guião corre de ponta a ponta — cliente novo, depósito, compras normais, transferência
+"de outra cidade" que esvazia a conta fica em verificação, analista confirma fraude, saldo intacto.
+
 ---
 
 **Ordem recomendada:** fases 1, 2 e 3 primeiro, porque dão uma ferramenta completa que a equipe consegue usar no dia a dia.

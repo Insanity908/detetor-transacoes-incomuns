@@ -25,6 +25,7 @@ Depois de mudar o `.env`, reinicie o sistema. Um valor inválido impede o arranq
 |---|---|---|
 | `AMBIENTE` | `producao` | `desenvolvimento`, `teste` ou `producao`. Em produção a `CHAVE_SECRETA` é obrigatória. |
 | `CHAVE_SECRETA` | gerada na instalação | Assina sessões, formulários e os modelos. Mínimo 32 caracteres. Se mudar, todas as sessões terminam e os modelos têm de ser treinados de novo. |
+| `MODO_DEMONSTRACAO` | `sim` fora de produção, `não` em produção | Mostra o quadro "A partir de" (cidade e país) na transferência do cliente. Desligado, a origem é sempre a cidade do cliente. |
 | `URL_BANCO` | SQLite em `instancia\` | Outra base, por exemplo PostgreSQL (`postgresql+psycopg://...`, exige instalar o `psycopg`). |
 | `PASTA_MODELOS`, `PASTA_LOGS`, `PASTA_ENVIOS` | `modelos`, `logs`, `instancia/envios` | Pastas relativas ao projeto ou caminhos completos. |
 | `NIVEL_LOG` | `INFO` | `DEBUG`, `INFO`, `WARNING` ou `ERROR`. |
@@ -44,13 +45,21 @@ falhar, a análise continua e a falha fica no log.
 
 | Comando | O que faz |
 |---|---|
-| `gerir.py preparar` | Cria o `.env` (se faltar), atualiza a base, treina os modelos (se faltarem) e pede o primeiro administrador. É o que o `instalar.bat` corre. |
+| `gerir.py preparar` | Cria o `.env` (se faltar), atualiza a base, treina os modelos (se faltarem), cria os 300 clientes sintéticos com conta e saldo e pede o primeiro administrador. É o que o `instalar.bat` corre. |
 | `gerir.py banco` | Cria ou atualiza as tabelas. As migrações mantêm os dados. |
-| `gerir.py treinar [--forcar]` | Treina a versão 1 dos modelos (com `--forcar`, mesmo que já existam). |
+| `gerir.py treinar [--forcar]` | Treina a versão 1 dos modelos (com `--forcar`, mesmo que já existam). Depois de atualizar para a versão com banco, corra `treinar --forcar`: o gerador passou a ter transferências, levantamentos e a fraude "conta esvaziada". |
+| `gerir.py verificar-saldos` | Confere o saldo de cada conta com a soma dos seus movimentos: diz "Saldos coerentes com os movimentos." ou lista as diferenças (código de saída 1). |
 | `gerir.py verificar` | Mostra a configuração e se o banco, os modelos e as contas estão prontos. |
 | `gerir.py criar-admin` | Cria uma conta de administrador (pede nome e senha). |
 | `gerir.py desbloquear NOME` | Reativa uma conta e limpa o bloqueio por tentativas falhadas. |
 | `gerir.py criar-chave NOME [--limite N]` | Cria uma chave da API e mostra-a uma única vez. |
+
+## Perfil Balcão e clientes do banco
+
+O perfil **Balcão** (criado em **Utilizadores**, como os outros) só abre a área **Clientes**. Os perfis analista e
+supervisor não abrem o balcão; o administrador abre tudo. Os **clientes** do banco (`C0001`...) são diferentes das
+contas da equipa: têm senha própria, definida no balcão, e só entram em `/cliente/`. Cada ação que mexe em dinheiro
+ou em dados de clientes fica na **Auditoria**.
 
 ## Contas
 
@@ -69,6 +78,8 @@ especificação OpenAPI em `/api/v1/openapi.json`, que abre no Swagger Editor ou
 
 - **Chaves**: em **API** (administrador) ou com `gerir.py criar-chave`. Cada sistema deve ter a sua. Só o SHA-256
   fica guardado: se perder uma chave, revogue-a e crie outra.
+- **Movimento do banco**: a resposta de uma transação de um cliente com conta traz o campo `movimento` (`estado` e `motivo`). A compra debita a conta antes de responder, fica **retida** se for de alto risco e é **recusada** sem saldo ou com risco acima do corte de recusa; para os restantes casos o campo é nulo.
+- **Depósitos**: `POST /api/v1/depositos` aceita até 500 depósitos por pedido, cada um com `id_deposito` (letras, algarismos e `. _ : -`, até 99 caracteres), `cliente`, `valor` e `data_hora`. É idempotente por `id_deposito`, e um lote com algum depósito inválido não grava nada. É o que o simulador usa para o salário.
 - **Limite**: cada chave tem um máximo de pedidos por minuto (600 por omissão). Acima dele, a resposta é `429`.
 - **Validação**: campos desconhecidos ou inválidos são recusados com `422` e a lista de problemas; nesse caso,
   nada do pedido é gravado. Reenviar o mesmo `id_transacao` devolve o resultado já gravado, sem o avaliar de novo.
@@ -90,6 +101,8 @@ treino.
 | `--tipos rajada,valor_alto` | Só estes tipos de fraude. |
 | `--cenario novo_tipo` | Mudança de comportamento: `novo_tipo` (fraude fracionada, que o modelo não conhece), `habitos` (compras seis horas mais tarde e em categorias novas) ou `valores` (inflação de 2,5 vezes). |
 | `--duracao 300` | Pára ao fim de 300 segundos reais. |
+
+No dia 25 de cada mês simulado, às 08:00, cada cliente recebe o salário por depósito. A linha "recusadas por saldo · retidas" mostra o que o banco recusou e reteve, e `--tipos` aceita também `conta_esvaziada`. O simulador precisa dos clientes sintéticos (`gerir.py preparar`).
 
 O simulador mostra periodicamente quantas fraudes injetou e quantas o sistema apanhou. Envia também o que o
 gerador marcou como fraude: serve de rótulo à monitorização e ao re-treino, mas nunca aparece aos analistas.

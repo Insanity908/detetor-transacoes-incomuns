@@ -38,6 +38,8 @@ Na pasta do projeto, faça duplo clique em **`instalar.bat`**. O script:
    - cria o ficheiro de configuração `.env` com uma **chave secreta nova**, única desta instalação;
    - cria a base de dados em `instancia\detetor.db`;
    - gera os dados sintéticos e **treina os modelos** (1 a 2 minutos);
+   - cria os **300 clientes de demonstração** (`C0001` a `C0300`), cada um com ficha, conta e saldo inicial, que são
+     os mesmos clientes do treino e os que o simulador usa;
    - **pede os dados do primeiro administrador**: nome de utilizador (por omissão `admin`), nome e senha
      (não aparece enquanto escreve).
 
@@ -99,7 +101,9 @@ Com o sistema ligado, o endereço `http://127.0.0.1:5000/saude` responde com `"e
 3. Substitua os ficheiros do programa pelos novos (ou `git pull`). **Não apague** `.env`, `instancia\` nem `modelos\`.
 4. Execute o `instalar.bat`: instala as dependências novas e atualiza a base de dados (as migrações correm sozinhas
    e mantêm os dados).
-5. Ligue com o `iniciar.bat`.
+5. Se vem de uma versão sem banco, treine os modelos de novo (`.venv\Scripts\python gerir.py treinar --forcar`)
+   e confirme os saldos (`.venv\Scripts\python gerir.py verificar-saldos`).
+6. Ligue com o `iniciar.bat`.
 
 ## 10. Desinstalar
 

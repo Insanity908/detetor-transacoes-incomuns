@@ -31,7 +31,8 @@ Os alertas aparecem em **Alertas** (use "Atualizar automaticamente").
 | **Utilizadores** | Login com senhas em hash e três perfis (analista, supervisor e administrador). Proteção CSRF e auditoria de todas as ações. |
 | **Integração** | API REST (`/api/v1/transacoes`) com chaves, limite de pedidos e documentação OpenAPI. Ficheiros CSV grandes são analisados em segundo plano. |
 | **Ciclo do modelo** | Monitorização do desempenho nas transações recentes e re-treino pela interface, com as decisões dos analistas como rótulos. Cada versão pode ser publicada ou desfeita, e os limiares de alerta são ajustáveis. Os modelos são assinados (HMAC) e verificados antes de serem carregados. |
-| **Simulação** | Compras normais e 5 tipos de fraude (valor alto, país estranho, horário estranho, rajada, conta tomada). Há também cenários de mudança (novo tipo de fraude, hábitos, inflação), para demonstrar a monitorização e o re-treino. |
+| **Banco de demonstração** | Clientes com conta e saldo, um perfil **Balcão** (fichas, depósitos, levantamentos) e uma **área do cliente** (saldo, movimentos, transferências). Cada saída de dinheiro é avaliada pelo detetor antes de mexer no saldo: autoriza, retém para a equipa decidir (fraude confirmada cancela e repõe o saldo) ou recusa. O painel mostra o valor retido e o protegido. |
+| **Simulação** | Compras normais, salários no dia 25 e 6 tipos de fraude (valor alto, país estranho, horário estranho, rajada, conta tomada, conta esvaziada). Há também cenários de mudança (novo tipo de fraude, hábitos, inflação), para demonstrar a monitorização e o re-treino. |
 
 ## Documentação
 
@@ -41,14 +42,16 @@ Os alertas aparecem em **Alertas** (use "Atualizar automaticamente").
   painel, limiares e versões do modelo.
 - [Manual de administração](docs/manual_administracao.md): configuração (`.env`), comandos, contas, API e chaves,
   simulador, ciclo de vida do modelo, cópias de segurança, segurança e desempenho.
-- [Plano do sistema](PLANO_SISTEMA_COMPLETO.md): as seis fases, do protótipo ao sistema completo.
+- [Guião da demonstração](docs/guiao_demonstracao.md): a história em seis passos, do balcão ao painel, com o
+  cliente sintético `C0001` e o simulador.
+- [Plano do sistema](PLANO_SISTEMA_COMPLETO.md): as nove fases, do protótipo ao sistema completo.
 
 ## Estrutura
 
 ```
 app.py              aplicação web (Flask): páginas principais e ligação dos módulos
 servidor.py         servidor de produção (waitress), usado pelo iniciar.bat
-gerir.py            administração: preparar, banco, treinar, verificar, criar-admin, desbloquear, criar-chave
+gerir.py            administração: preparar, banco, treinar, verificar, verificar-saldos, criar-admin, desbloquear, criar-chave
 treinar.py          treino inicial: gera os dados, treina, avalia e grava os modelos (versão 1)
 simulador.py        envia transações simuladas à API, com cenários de mudança
 carga.py            teste de carga da API
