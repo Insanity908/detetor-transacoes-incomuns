@@ -15,8 +15,11 @@ FORMATOS_DATA = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y
                  "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M")
 
 
-def ler_csv(conteudo: bytes) -> pd.DataFrame:
-    """Lê com `,` ou `;`. Com `;` (Excel em português), os valores usam vírgula decimal."""
+def ler_csv(conteudo: bytes, cliente: str | None = None) -> pd.DataFrame:
+    """Lê com `,` ou `;`. Com `;` (Excel em português), os valores usam vírgula decimal.
+
+    Com `cliente`, a coluna cliente é opcional: se faltar, todas as linhas são desse cliente.
+    """
     if len(conteudo) > MAX_BYTES:
         raise ValueError("O ficheiro passa de 5 MB")
     try:
@@ -30,6 +33,8 @@ def ler_csv(conteudo: bytes) -> pd.DataFrame:
     except pd.errors.ParserError as exc:
         raise ValueError(f"O ficheiro não é um CSV válido: {exc}") from None
     df.columns = [str(c).strip().lower() for c in df.columns]
+    if cliente is not None and "cliente" not in df.columns:
+        df["cliente"] = cliente
     faltam = [c for c in COLUNAS if c not in df.columns]
     if faltam:
         raise ValueError(f"Faltam as colunas: {', '.join(faltam)}")

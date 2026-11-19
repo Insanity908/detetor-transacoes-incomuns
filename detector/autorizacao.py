@@ -15,6 +15,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import historico as historico_importado
 from . import repositorio
 from .alertas import criar_para_analise
 from .banco import CANAIS_MOVIMENTO, Alerta, ContaBancaria, Movimento, TransacaoAvaliada
@@ -126,6 +127,9 @@ def autorizar(sessoes: sessionmaker, artefatos, pedidos: list[PedidoDebito], cor
                             "tipo_fraude_simulada": pedidos[i].tipo_fraude_simulada} for i in avaliar])
         desde = df["data_hora"].min().to_pydatetime() - timedelta(days=DIAS_HISTORICO)
         historico = repositorio.historico_api(sessoes, set(df["cliente"]), desde)
+        importado = historico_importado.para_detetor(sessoes, set(df["cliente"]), desde)
+        if len(importado):  # passado trazido de outro banco (só para o detetor)
+            historico = pd.concat([historico, importado], ignore_index=True) if len(historico) else importado
         resultado = avaliar_transacoes(artefatos, df, historico_extra=historico, cortes=cortes).reset_index(drop=True)
 
     # 3. Saldo, gravação e débitos numa só transação, por ordem de (momento, índice).

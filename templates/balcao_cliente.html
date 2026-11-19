@@ -46,6 +46,28 @@
   <button type="submit" class="secundario">{% if tem_acesso %}Redefinir acesso{% else %}Criar acesso{% endif %}</button>
 </form>
 
+<h2 class="separado">Histórico anterior <small>(opcional)</small></h2>
+{% if historico %}
+<p class="ajuda">Histórico importado: {{ historico.total }} transações, de {{ historico.primeira.strftime('%d/%m/%Y') }} a {{ historico.ultima.strftime('%d/%m/%Y') }}{% if historico.categorias %} — sobretudo {{ historico.categorias | map('categoria') | join(', ') }}{% endif %}. Só o detetor o usa: não mexe no saldo nem aparece ao cliente.</p>
+{% else %}
+<p class="ajuda">Sem histórico importado — o detetor trata-o como cliente novo. Pode carregar o extrato de outro banco (CSV com data_hora, valor, cidade, pais e categoria; últimos 90 dias, até 2 000 linhas).</p>
+{% endif %}
+<form method="post" action="/balcao/clientes/{{ c.id }}/historico" enctype="multipart/form-data" class="envio" data-envio-unico>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Ficheiro CSV <input name="ficheiro" type="file" accept=".csv,text/csv" required></label>
+  <button type="submit" class="secundario">Importar</button>
+</form>
+<form method="post" action="/balcao/clientes/{{ c.id }}/historico/exemplo" class="envio" data-envio-unico>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="secundario">Gerar histórico de exemplo</button>
+</form>
+{% if historico %}
+<form method="post" action="/balcao/clientes/{{ c.id }}/historico/apagar" class="envio">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="secundario">Apagar histórico importado</button>
+</form>
+{% endif %}
+
 <h2 class="separado">Extrato</h2>
 {% if extrato %}
 <div class="rolagem"><table>

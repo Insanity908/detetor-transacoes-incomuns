@@ -359,6 +359,25 @@ class Movimento(Base):
     criado_por: Mapped[str] = mapped_column(String(50))
 
 
+class HistoricoImportado(Base):
+    """Transações anteriores de um cliente (de outro banco), só para o detetor: não mexem no saldo nem em alertas."""
+    __tablename__ = "historico_importado"
+    __table_args__ = (CheckConstraint("valor > 0", name="ck_historico_importado_valor"),
+                      UniqueConstraint("cliente_id", "data_hora", "valor", "cidade", "pais", "categoria",
+                                       name="uq_historico_importado_linha"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id", ondelete="CASCADE"), index=True)
+    data_hora: Mapped[datetime] = mapped_column(DateTime)
+    valor: Mapped[int] = mapped_column(Integer)  # cêntimos
+    cidade: Mapped[str] = mapped_column(String(100))
+    pais: Mapped[str] = mapped_column(String(100))
+    categoria: Mapped[str] = mapped_column(String(100))
+    origem: Mapped[str] = mapped_column(String(10))  # ficheiro | exemplo
+    importado_em: Mapped[datetime] = mapped_column(DateTime)
+    importado_por: Mapped[str] = mapped_column(String(50))
+
+
 class AcessoCliente(Base):
     """Credenciais de um cliente na área do cliente (mesma lógica das contas da equipa)."""
     __tablename__ = "acessos_cliente"

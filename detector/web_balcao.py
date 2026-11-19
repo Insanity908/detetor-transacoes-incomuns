@@ -7,7 +7,7 @@ from flask import Flask, abort, current_app, flash, redirect, render_template, r
 from markupsafe import Markup
 from sqlalchemy.orm import sessionmaker
 
-from . import acesso, acesso_cliente, clientes, contas_bancarias
+from . import acesso, acesso_cliente, clientes, contas_bancarias, historico
 from .autorizacao import PedidoDebito, autorizar
 from .acesso import auditar, exige_area, utilizador_atual
 from .dinheiro import de_centavos, para_centavos
@@ -17,7 +17,8 @@ from .gerador import CATEGORIA_LEVANTAMENTO, CIDADES
 
 ENDPOINTS = frozenset({"balcao_clientes", "balcao_cliente_novo", "balcao_cliente_novo_post", "balcao_cliente",
                        "balcao_cliente_editar", "balcao_cliente_deposito", "balcao_cliente_bloquear",
-                       "balcao_cliente_levantamento", "balcao_cliente_acesso"})
+                       "balcao_cliente_levantamento", "balcao_cliente_acesso", "balcao_cliente_historico",
+                       "balcao_cliente_historico_exemplo", "balcao_cliente_historico_apagar"})
 acesso.ENDPOINTS_BALCAO.update(ENDPOINTS)
 NOMES_ESTADO = {"autorizado": "Autorizado", "recusado": "Recusado", "retido": "Retido", "cancelado": "Cancelado"}
 CAMPOS_FICHA = ("nome", "data_nascimento", "tipo_documento", "numero_documento", "telefone", "email", "cidade", "morada")
@@ -42,7 +43,8 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
     def _ficha(c, erro=None, estado=200):
         return render_template("balcao_cliente.html", c=c, conta=c.conta, erro=erro,
                                extrato=contas_bancarias.extrato(sessoes, c.conta.id),
-                               tem_acesso=acesso_cliente.obter_acesso(sessoes, c.id) is not None), estado
+                               tem_acesso=acesso_cliente.obter_acesso(sessoes, c.id) is not None,
+                               historico=historico.resumo(sessoes, c.id)), estado
 
     @app.get("/balcao/clientes")
     @exige_area("balcao")
@@ -145,6 +147,40 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         entrada = f"O cliente entra em /cliente/entrar com o código {c.codigo}"
         flash(f"Acesso criado. {entrada} e muda a senha na primeira entrada." if novo
               else f"Senha redefinida. {entrada} e muda-a ao entrar; as sessões abertas terminaram.", "sucesso")
+        return redirect(url_for("balcao_cliente", cliente_id=c.id))
+
+    @app.post("/balcao/clientes/<int:cliente_id>/historico")
+    @exige_area("balcao")
+    def balcao_cliente_historico(cliente_id):
+        c = _cliente(cliente_id)
+        ficheiro = request.files.get("ficheiro")
+        if ficheiro is None or not ficheiro.filename:
+            return _ficha(c, "Escolha um ficheiro CSV com o histórico.", 400)
+        try:
+            r = historico.importar(sessoes, c.id, ficheiro.read(), utilizador_atual().nome_utilizador)
+        except ValueError as exc:
+            return _ficha(c, f"Histórico não importado: {exc}", 400)
+        auditar("historico_importado", alvo=c.codigo, detalhe=f"{r.inseridas} linhas novas, {r.repetidas} repetidas")
+        flash(f"Histórico importado: {r.inseridas} transações novas"
+              + (f" ({r.repetidas} repetidas ignoradas)." if r.repetidas else "."), "sucesso")
+        return redirect(url_for("balcao_cliente", cliente_id=c.id))
+
+    @app.post("/balcao/clientes/<int:cliente_id>/historico/exemplo")
+    @exige_area("balcao")
+    def balcao_cliente_historico_exemplo(cliente_id):
+        c = _cliente(cliente_id)
+        n = historico.gerar_exemplo(sessoes, c.id, utilizador_atual().nome_utilizador)
+        auditar("historico_importado", alvo=c.codigo, detalhe=f"exemplo: {n} linhas novas")
+        flash(f"Histórico de exemplo gerado: {n} transações novas.", "sucesso")
+        return redirect(url_for("balcao_cliente", cliente_id=c.id))
+
+    @app.post("/balcao/clientes/<int:cliente_id>/historico/apagar")
+    @exige_area("balcao")
+    def balcao_cliente_historico_apagar(cliente_id):
+        c = _cliente(cliente_id)
+        n = historico.apagar(sessoes, c.id)
+        auditar("historico_apagado", alvo=c.codigo, detalhe=f"{n} linhas")
+        flash(f"Histórico importado apagado ({n} transações).", "sucesso")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))
 
     @app.post("/balcao/clientes/<int:cliente_id>/bloquear")

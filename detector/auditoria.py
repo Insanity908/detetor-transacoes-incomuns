@@ -41,6 +41,8 @@ ACOES = {
     "cliente_alterado": "Alterou ficha de cliente",
     "deposito": "Registou depósito",
     "levantamento": "Registou levantamento",
+    "historico_importado": "Importou histórico anterior",
+    "historico_apagado": "Apagou histórico importado",
     "conta_bancaria_bloqueada": "Bloqueou conta bancária",
     "conta_bancaria_desbloqueada": "Desbloqueou conta bancária",
     "movimento_executado": "Executou movimento retido",
