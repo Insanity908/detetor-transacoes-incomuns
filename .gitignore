@@ -14,3 +14,6 @@ logs/
 *.db-wal
 .coverage
 htmlcov/
+
+# Documentação mantida só localmente (removida do repositório)
+docs/

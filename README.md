@@ -57,14 +57,6 @@ Com `DEMO_DADOS=1` (já no `render.yaml`), cada arranque também cria os utiliza
 
 ## Documentação
 
-- [Manual de instalação (Windows)](docs/manual_instalacao.md): do Python ao primeiro login, uso na rede local,
-  problemas frequentes e atualização.
-- [Manual do utilizador](docs/manual_utilizador.md): perfis, níveis de risco, o ciclo de um alerta, ficheiros,
-  painel, limiares e versões do modelo.
-- [Manual de administração](docs/manual_administracao.md): configuração (`.env`), comandos, contas, API e chaves,
-  simulador, ciclo de vida do modelo, cópias de segurança, segurança e desempenho.
-- [Guião da demonstração](docs/guiao_demonstracao.md): a história em seis passos, do balcão ao painel, com o
-  cliente sintético `C0001` e o simulador.
 - [Plano do sistema](PLANO_SISTEMA_COMPLETO.md): as nove fases, do protótipo ao sistema completo.
 
 ## Estrutura
@@ -80,7 +72,6 @@ detector/           o sistema: modelos, features, API, alertas, contas, auditori
 migracoes/          alterações da base de dados (Alembic), aplicadas automaticamente
 templates/, static/ interface
 tests/              testes (pytest)
-docs/               manuais
 ```
 
 Os dados gerados não vão para o Git: a base de dados e a chave local ficam em `instancia/`, os modelos em
