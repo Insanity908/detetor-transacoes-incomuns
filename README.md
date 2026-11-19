@@ -36,6 +36,13 @@ Com `DEMO_DADOS=1` (já no `render.yaml`), cada arranque também cria os utiliza
 `balcao` e o **Cliente Demonstração** (20.000 MT, acesso em `/cliente/entrar`), todos com a senha `DEMO_SENHA`
 (ou a `ADMIN_SENHA`, se a `DEMO_SENHA` ficar vazia). Assim a demonstração fica pronta depois de qualquer reinício.
 
+## Novidades
+
+- **Histórico anterior** no balcão (CSV dos últimos 90 dias ou exemplo gerado), só para o detetor.
+- **Pagamentos** na área do cliente, com categoria e comerciante; no modo demonstração, **Local** e **data/hora**
+  simulados.
+- **Novo estilo**: faixa em gradiente, navegação em pílulas, cartões de resumo e listas com ícones.
+
 ## O que faz
 
 | Área | Resumo |

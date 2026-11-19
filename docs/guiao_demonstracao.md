@@ -96,3 +96,13 @@ e confirma em cada passo o que este guião diz (os saldos, os estados e o valor 
 `.venv\Scripts\python -m pytest tests\test_guiao.py`. No teste, o nível de risco da transferência do passo 4 é
 forçado, para ser sempre "Alto risco"; na demonstração real é o modelo que decide. Se uma transferência não ficar
 em verificação, experimente outra cidade ou país em **A partir de**, ou um valor próximo de todo o saldo disponível. Um valor acima do saldo disponível não fica em verificação: é recusado por saldo insuficiente.
+
+## Extras (opcionais)
+
+- **Cliente com histórico:** antes do passo 3, na ficha do cliente no balcão, clique **Gerar histórico de exemplo**.
+  O detetor deixa de o tratar como cliente novo, e as compras normais passam com mais confiança.
+- **Pagamento suspeito:** na área do cliente, em **Pagar**, escolha **Eletrónica**, um valor alto e, no quadro
+  **Simular**, o Local **Nigéria** e a hora **03:00**. O detetor deve reter ou recusar o pagamento; o alerta mostra os
+  motivos (país estranho, hora invulgar, categoria nova). Se o modelo real o autorizar, aumente o valor ou mude a
+  categoria para uma que o cliente nunca usou.
+

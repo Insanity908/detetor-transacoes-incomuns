@@ -33,6 +33,12 @@ extrato e o que pode fazer:
   disponível, ou com risco muito alto, o levantamento é recusado.
 - **Bloquear conta**: a conta bloqueada não recebe nem envia dinheiro, e o cliente deixa de entrar.
 - **Acesso do cliente**: crie ou redefina a senha temporária; o cliente muda-a na primeira entrada.
+- **Histórico anterior** (opcional): para um cliente que vem de outro banco, importe o extrato antigo num CSV com as
+  colunas `data_hora, valor, cidade, pais, categoria` (a coluna `cliente` é opcional), dos **últimos 90 dias**, até
+  **2 000 linhas**; aceita o formato do Excel em português (`;` e vírgula decimal). Um ficheiro com erros é recusado
+  por inteiro; linhas repetidas são ignoradas. **Gerar histórico de exemplo** cria cerca de 60 dias de compras
+  coerentes com a ficha, e **Apagar histórico importado** volta a tratá-lo como cliente novo. Este histórico serve
+  só ao detetor: não mexe no saldo, não aparece ao cliente e não cria alertas.
 
 ## Área do cliente
 
@@ -42,10 +48,15 @@ bloqueado durante 15 minutos.
 
 - **Início**: o **saldo**, o **disponível** (o saldo menos o que está em verificação), o valor **em verificação** e
   os últimos movimentos, cada um com o estado: **Concluída**, **Em verificação** ou **Recusada** (com o motivo).
-- **Fazer uma transferência**: indique o número da conta de destino, o valor e, se quiser, uma descrição. O
+- **Pagar**: escolha a **categoria** (Mercearia, Combustível, Restaurante, Farmácia, Recargas, Transporte,
+  Vestuário, Eletrónica ou Viagem), o **comerciante** e o valor. O pagamento passa pelo detetor como uma compra com
+  cartão: pode ser concluído, ficar em verificação ou ser recusado.
+- **Transferir**: indique o número da conta de destino, o valor e, se quiser, uma descrição. O
   resultado aparece logo. Pode ser recusada (sem saldo, destino inexistente ou bloqueado, ou a própria conta) ou
   ficar **em verificação**: o valor sai do disponível, mas o saldo só muda quando a equipa decide.
-  Em modo demonstração há ainda **A partir de** (cidade e país), para simular uma transferência feita de outro local.
+  Em modo demonstração, pagamentos e transferências têm o quadro **Simular**: o **Local** (uma cidade de Moçambique
+  ou um país estrangeiro) e a **data e hora** (até 30 dias para trás; vazio = agora), para mostrar ao detetor, por
+  exemplo, uma compra de eletrónica às 3h da manhã no estrangeiro.
 - **Senha** muda a senha e **Sair** termina a sessão. Os movimentos recebidos mostram o número da conta de origem,
   nunca o nome de quem enviou.
 
