@@ -84,7 +84,7 @@ def validar(form: Mapping[str, str]) -> DadosCliente:
 def _numero_conta(numero_cliente: int) -> str:
     """'0001' + número do cliente com 7 dígitos + dígito de controlo (mod 11; 10 conta como 0)."""
     base = f"0001{numero_cliente:07d}"
-    soma = sum(int(d) * p for d, p in zip(reversed(base), range(2, len(base) + 2)))
+    soma = sum(int(d) * p for d, p in zip(reversed(base), range(2, len(base) + 2), strict=True))
     return base + str((11 - soma % 11) % 11 % 10)
 
 

@@ -635,7 +635,7 @@ def test_deposito_exige_chave_e_conta_bloqueada_e_recusada(app, chave):
 
 
 def test_id_de_deposito_nao_colide_com_id_de_transacao(app, chave):
-    conta = _cliente_banco(app, saldo=10_000_000)
+    _cliente_banco(app, saldo=10_000_000)
     _api(app, chave, json=_transacao(1, cliente="B0001", valor=10.0, id_transacao="X-1"))
     r = _api(app, chave, caminho="/api/v1/depositos", json={"depositos": [_deposito(id_deposito="X-1")]})
     assert r.status_code == 200 and r.json["resultados"][0]["estado"] == "autorizado"

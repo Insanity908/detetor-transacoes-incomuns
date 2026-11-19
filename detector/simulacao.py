@@ -26,7 +26,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from . import contas_bancarias, gerador
-from .gerador import CATEGORIA_TRANSFERENCIA, CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS, PESO_CATEGORIAS, TIPOS_FRAUDE
+from .gerador import (CATEGORIA_TRANSFERENCIA, CATEGORIAS, CIDADES, NOMES_TIPO_FRAUDE, PAIS_HABITUAL, PAISES_ESTRANHOS,
+                      PESO_CATEGORIAS, TIPOS_FRAUDE)
 
 DESVIO_HORA = 2.5  # como gerador._hora
 FRACAO_NOTURNA = 0.02  # compras legítimas entre a meia-noite e as 5h

@@ -297,7 +297,7 @@ def receber_transacoes():
             if _tentativa == 1:
                 raise
             continue
-        decisoes = {p.id_transacao: d for p, d in zip(pedidos, decididas)}
+        decisoes = {p.id_transacao: d for p, d in zip(pedidos, decididas, strict=True)}
         break
     dono = {transacoes.at[i, "id_transacao"]: codigos[i] for i in transacoes.index[do_banco]}
     avaliadas = repositorio.resultados_api(

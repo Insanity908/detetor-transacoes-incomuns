@@ -139,7 +139,8 @@ def liquidar(s: Session, movimento_id: int, executar: bool, por: str) -> Movimen
         destino = s.get(ContaBancaria, movimento.contraparte_id) if movimento.contraparte_id else None
         if origem_estado == "bloqueada":
             movimento.motivo = MOTIVO_BLOQUEADA_ENTRETANTO
-        elif movimento.tipo == "transferencia_enviada" and movimento.contraparte_id is not None and (destino is None or destino.estado == "bloqueada"):
+        elif (movimento.tipo == "transferencia_enviada" and movimento.contraparte_id is not None
+              and (destino is None or destino.estado == "bloqueada")):
             movimento.motivo = MOTIVO_DESTINO_BLOQUEADO_ENTRETANTO
         else:
             s.execute(update(ContaBancaria).where(ContaBancaria.id == movimento.conta_id)

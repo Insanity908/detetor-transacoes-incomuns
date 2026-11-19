@@ -273,7 +273,7 @@ def test_recusado_nao_mexe_no_saldo_e_validacoes(sessoes):
 
 
 def test_movimento_da_transacao(sessoes):
-    cid = _conta_com(sessoes, 1000)
+    _conta_com(sessoes, 1000)
     with sessoes.begin() as s:
         assert contas_bancarias.movimento_da_transacao(s, 999) is None
 

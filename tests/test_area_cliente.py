@@ -1,11 +1,15 @@
 """Tarefa 15: acesso do cliente (entrada, sessão e senha), separado do da equipa."""
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
 from app import criar_app
-from detector import acesso_cliente, clientes, contas_bancarias
+from detector import acesso_cliente, autorizacao, clientes, contas_bancarias
+from detector.auditoria import ACOES
+from detector.configuracao import ler_configuracao
+from detector.contas_bancarias import verificar_saldos
 from detector.banco import AcessoCliente, EventoAuditoria
 from tests.conftest import ClienteComCsrf, criar_cliente
 
@@ -218,12 +222,6 @@ def test_area_do_cliente_funciona_sem_modelos(tmp_path, cli_sem_modelos=None):
 
 
 # ------------------------------------------------------------ Tarefa 16: saldo, movimentos e transferências
-from pathlib import Path
-
-from detector import autorizacao
-from detector.contas_bancarias import verificar_saldos
-from detector.auditoria import ACOES
-from detector.configuracao import ler_configuracao
 
 RAIZ = Path(__file__).resolve().parent.parent
 NOVA_SENHA = "senha-nova-2"
@@ -295,7 +293,8 @@ def test_movimento_recebido_mostra_numero_e_nunca_o_nome(app, sessoes, cli, outr
 def test_transferencia_normal_conclui_e_move_saldos(app, sessoes, cli, outro, acesso, monkeypatch):
     _depositar(sessoes, cli, 100_000)
     _forcar_nivel(monkeypatch, "Normal", 5.0)
-    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,50"}, follow_redirects=True)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,50"},
+                               follow_redirects=True)
     assert r.status_code == 200 and "Concluída" in r.get_data(as_text=True)
     assert _saldos(sessoes, cli, outro) == [(74_950, 0), (25_050, 0)]
     assert verificar_saldos(sessoes) == []
@@ -304,7 +303,8 @@ def test_transferencia_normal_conclui_e_move_saldos(app, sessoes, cli, outro, ac
 def test_transferencia_retida_fica_em_verificacao(app, sessoes, cli, outro, acesso, monkeypatch):
     _depositar(sessoes, cli, 100_000)
     _forcar_nivel(monkeypatch, "Alto risco", 90.0)
-    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,00"}, follow_redirects=True)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "250,00"},
+                               follow_redirects=True)
     assert "Em verificação" in r.get_data(as_text=True)
     assert _saldos(sessoes, cli, outro) == [(100_000, 25_000), (0, 0)]
     assert verificar_saldos(sessoes) == []

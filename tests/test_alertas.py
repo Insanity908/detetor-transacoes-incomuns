@@ -382,7 +382,6 @@ def _retido(app, artefatos, monkeypatch, valor=25000, destino=False, tipo=None):
     from detector import autorizacao, clientes, contas_bancarias
     from detector.autorizacao import PedidoDebito
     from detector.limiares import Cortes
-    from detector.banco import Movimento
     sessoes = _sessoes(app)
 
     def conta(n, saldo):
@@ -513,7 +512,7 @@ def test_se_liquidar_falha_o_alerta_continua_em_analise(app, artefatos_pequenos,
     def falha(*a, **k):
         raise ValueError("falhou")
     monkeypatch.setattr(contas_bancarias, "liquidar", falha)
-    pagina = _acao(sup, i, "decidir", decisao="falso_alarme", texto="Verificado com o cliente.")
+    _acao(sup, i, "decidir", decisao="falso_alarme", texto="Verificado com o cliente.")
     assert _alerta(app, i).estado == "em_analise"
     assert _movimento(app, m)[0] == "retido"
     assert not any(a[1] == "decidir_alerta" for a in _acoes(app, utilizador="sup"))
@@ -585,7 +584,8 @@ def test_falso_alarme_num_levantamento_retido_cancela_em_vez_de_executar(app, ar
     assert _saldos(app, o) == [(100000, 25000)]
     _supervisor_decide(app, i, "falso_alarme")
     assert _movimento(app, m) == ("cancelado", contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE)
-    assert contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE ==         "Levantamento não entregue: o cliente deve repetir o pedido ao balcão."
+    assert contas_bancarias.MOTIVO_LEVANTAMENTO_NAO_ENTREGUE == (
+        "Levantamento não entregue: o cliente deve repetir o pedido ao balcão.")
     assert _saldos(app, o) == [(100000, 0)]
     assert contas_bancarias.verificar_saldos(_sessoes(app)) == []
     assert _alerta(app, i).estado == "falso_alarme"

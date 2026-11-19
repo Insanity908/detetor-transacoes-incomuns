@@ -85,7 +85,8 @@ def test_relatorio_descreve_o_resultado_real_das_divisoes(resultado):
 
 def test_atalhos_por_tipo_de_fraude(resultado):
     res, raiz = resultado
-    assert set(res["atalhos_por_tipo"]) == {"valor_alto", "pais_estranho", "horario_estranho", "rajada", "conta_tomada", "conta_esvaziada"}
+    assert set(res["atalhos_por_tipo"]) == {"valor_alto", "pais_estranho", "horario_estranho", "rajada",
+                                             "conta_tomada", "conta_esvaziada"}
     assert set(res["atalhos_por_tipo"]["rajada"]) == {"valor", "hora", "pais", "categoria", "cidade"}
     assert "## Atalhos por tipo de fraude" in (raiz / "RELATORIO.md").read_text(encoding="utf-8")
 
