@@ -22,6 +22,16 @@ Para ver o sistema a receber transações em tempo real, com o sistema ligado:
 
 Os alertas aparecem em **Alertas** (use "Atualizar automaticamente").
 
+## Publicar online (Render, plano gratuito)
+
+O ficheiro `render.yaml` descreve o serviço. No [Render](https://render.com): **New → Blueprint**, escolha este
+repositório e, quando pedir, defina **`ADMIN_SENHA`** (a senha do utilizador `admin`). O build treina os modelos;
+cada arranque corre `gerir.py nuvem`, que cria a base de dados, os 300 clientes de demonstração e o administrador.
+
+No plano gratuito não há disco persistente: os dados (clientes novos, movimentos, alertas) perdem-se quando o
+serviço reinicia ou adormece (após cerca de 15 minutos sem visitas). Serve para demonstrar; para guardar dados,
+use um plano com disco e aponte `URL_BANCO` para ele.
+
 ## O que faz
 
 | Área | Resumo |

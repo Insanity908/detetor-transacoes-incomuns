@@ -2,6 +2,8 @@
 
 Execução, na raiz do projeto:
     python gerir.py preparar            cria o .env (se faltar), atualiza o banco e treina os modelos (se faltarem)
+    python gerir.py nuvem               arranque num alojamento (Render): banco, modelos, clientes e administrador
+                                        (ADMIN_UTILIZADOR / ADMIN_SENHA do ambiente)
     python gerir.py banco               cria ou atualiza as tabelas do banco de dados
     python gerir.py treinar [--forcar]  treina os modelos (com --forcar, mesmo que já existam)
     python gerir.py verificar           mostra a configuração e se o banco e os modelos estão prontos
@@ -93,6 +95,29 @@ def criar_admin(nome_utilizador: str, nome: str, senha: str) -> None:
     print(f"Administrador '{novo.nome_utilizador}' criado. Já pode entrar no sistema.")
 
 
+def nuvem() -> None:
+    """Arranque num alojamento sem teclado (Render): banco, modelos, clientes de demonstração e administrador.
+
+    O administrador vem do ambiente (ADMIN_UTILIZADOR, ADMIN_NOME, ADMIN_SENHA) e só é criado se ainda não
+    houver nenhuma conta. Pode correr em cada arranque: não repete o que já existe.
+    """
+    import os
+
+    from detector import contas
+    banco()
+    treinar()
+    criar_sinteticos()
+    if contas.contar(_sessoes()) > 0:
+        print("Já existem contas: nenhum administrador criado.")
+        return
+    senha = os.environ.get("ADMIN_SENHA", "")
+    if not senha:
+        print("Nenhuma conta criada: defina ADMIN_SENHA (e, se quiser, ADMIN_UTILIZADOR) no painel do alojamento.")
+        return
+    criar_admin(os.environ.get("ADMIN_UTILIZADOR", "").strip() or "admin",
+                os.environ.get("ADMIN_NOME", "").strip() or "Administrador", senha)
+
+
 def criar_admin_interativo() -> None:
     print("Criar a conta de administrador.")
     nome_utilizador = input("Nome de utilizador [admin]: ").strip() or "admin"
@@ -166,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     analisador = argparse.ArgumentParser(description="Administração do Detetor de Fraudes Financeiras")
     comandos = analisador.add_subparsers(dest="comando", required=True)
     comandos.add_parser("preparar", help="cria o .env, atualiza o banco e treina os modelos se faltarem")
+    comandos.add_parser("nuvem", help="arranque num alojamento (Render): banco, modelos, clientes e administrador do ambiente")
     comandos.add_parser("banco", help="cria ou atualiza as tabelas")
     t = comandos.add_parser("treinar", help="treina os modelos")
     t.add_argument("--forcar", action="store_true", help="treina mesmo que os modelos já existam")
@@ -194,7 +220,9 @@ def main(argv: list[str] | None = None) -> int:
                 except (EOFError, KeyboardInterrupt):  # sem teclado (ou Ctrl+C): a instalação continua
                     print("\nNenhuma conta criada. Crie o administrador com: .venv\\Scripts\\python gerir.py criar-admin")
             return verificar()
-        if args.comando == "banco":
+        if args.comando == "nuvem":
+            nuvem()
+        elif args.comando == "banco":
             banco()
         elif args.comando == "treinar":
             treinar(args.forcar)

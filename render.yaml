@@ -1,0 +1,33 @@
+# Deploy no Render (plano gratuito): https://render.com -> New -> Blueprint -> escolher este repositório.
+# Plano gratuito: sem disco persistente. A base de dados SQLite é recriada a cada arranque (clientes de
+# demonstração e administrador voltam a ser criados); o serviço adormece após ~15 min sem visitas.
+services:
+  - type: web
+    name: detetor-fraudes
+    runtime: python
+    plan: free
+    # Os modelos são treinados no build (1 a 2 minutos) e ficam na imagem do deploy.
+    buildCommand: pip install -r requirements.txt && python gerir.py treinar
+    startCommand: python gerir.py nuvem && python servidor.py
+    healthCheckPath: /saude
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.9
+      - key: AMBIENTE
+        value: producao
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORTA
+        value: "10000"
+      - key: THREADS
+        value: "4"
+      - key: MODO_DEMONSTRACAO
+        value: "1"
+      # Também assina os modelos: tem de ser a mesma no build e no arranque (o Render gera-a uma vez).
+      - key: CHAVE_SECRETA
+        generateValue: true
+      - key: ADMIN_UTILIZADOR
+        value: admin
+      # Defina a senha do administrador no painel do Render (não fica no repositório).
+      - key: ADMIN_SENHA
+        sync: false
