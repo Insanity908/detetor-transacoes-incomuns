@@ -7,18 +7,19 @@
   <a href="/balcao/clientes/novo">Novo cliente</a>
 </form>
 {% if lista %}
-<div class="rolagem"><table>
-  <thead><tr><th>Código</th><th>Nome</th><th>Documento</th><th>Cidade</th><th>Conta</th><th class="num">Saldo</th><th></th></tr></thead>
-  <tbody>
+<ul class="lista">
   {% for c in lista %}
-    <tr>
-      <td>{{ c.codigo }}</td><td>{{ c.nome }}</td><td>{{ c.tipo_documento }} {{ c.numero_documento }}</td>
-      <td>{{ c.cidade }}</td><td>{{ c.conta.numero }}</td><td class="num">{{ c.conta.saldo|mtc }}</td>
-      <td><a href="/balcao/clientes/{{ c.id }}">Abrir ficha</a></td>
-    </tr>
+  <li class="lista-item">
+    <span class="lista-icone" aria-hidden="true">{{ c.nome[:1] }}</span>
+    <div class="lista-texto">
+      <b><a href="/balcao/clientes/{{ c.id }}">{{ c.nome }}</a></b>
+      <small>{{ c.codigo }} · {{ c.tipo_documento }} {{ c.numero_documento }} · {{ c.cidade|capitalize }} · conta {{ c.conta.numero }}</small>
+    </div>
+    <span class="lista-valor">{{ c.conta.saldo|mtc }}</span>
+    <a href="/balcao/clientes/{{ c.id }}">Abrir ficha</a>
+  </li>
   {% endfor %}
-  </tbody>
-</table></div>
+</ul>
 {% else %}
 <p class="ajuda">Nenhum cliente encontrado.</p>
 {% endif %}

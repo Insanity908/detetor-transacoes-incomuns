@@ -36,26 +36,23 @@
   {% if auto %}<span class="ajuda">A atualizar a cada {{ intervalo }} s.</span>
   <a href="/alertas?{{ consulta | urlencode }}">Parar a atualização</a>
   {% else %}<a href="/alertas?{{ (consulta | urlencode ~ '&') if consulta }}auto=1">Atualizar automaticamente</a>{% endif %}</p>
-<div class="rolagem"><table class="fila">
-  <thead><tr><th class="num">N.º</th><th class="num">Risco</th><th>Nível</th><th>Cliente</th><th>Data e hora</th>
-    <th class="num">Valor</th><th>Motivo principal</th><th>Estado</th><th>Responsável</th></tr></thead>
-  <tbody>
-  {% for a in alertas %}{% set t = a.transacao %}
-    <tr>
-      <td class="num"><a href="/alertas/{{ a.id }}">#{{ a.id }}</a></td>
-      <td class="num">{{ t.risco | nota }}</td>
-      <td><span class="etiqueta nivel-{{ classe_nivel[t.nivel] }}">{{ t.nivel }}</span></td>
-      <td>{{ t.cliente }}</td><td>{{ t.data_hora.strftime('%d/%m/%Y %H:%M') }}</td>
-      <td class="num">{{ t.valor | mt }}</td>
-      <td>{{ (t.motivos | motivos | first) or 'Combinação de fatores' }}</td>
-      <td><span class="estado estado-{{ a.estado }}">{{ nomes_estado[a.estado] }}</span></td>
-      <td>{{ a.responsavel.nome if a.responsavel else '—' }}</td>
-    </tr>
+<ul class="lista fila">
+  {% for a in alertas %}{% set t = a.transacao %}{% set cls = classe_nivel[t.nivel] %}
+  <li class="lista-item">
+    <span class="lista-icone icone-{{ cls }}" aria-hidden="true">{{ '!' if cls == 'alto' else ('?' if cls == 'atencao' else '✓') }}</span>
+    <div class="lista-texto">
+      <b><a href="/alertas/{{ a.id }}">#{{ a.id }}</a> · {{ t.cliente }} · {{ t.data_hora.strftime('%d/%m/%Y %H:%M') }}</b>
+      <small>{{ (t.motivos | motivos | first) or 'Combinação de fatores' }} · risco {{ t.risco | nota }} ·
+        <span class="estado estado-{{ a.estado }}">{{ nomes_estado[a.estado] }}</span>
+        · {{ a.responsavel.nome if a.responsavel else 'sem responsável' }}</small>
+    </div>
+    <span class="lista-valor">{{ t.valor | mt }}</span>
+    <span class="etiqueta nivel-{{ cls }}">{{ t.nivel }}</span>
+  </li>
   {% else %}
-    <tr><td colspan="9" class="ajuda">Nenhum alerta nesta vista.</td></tr>
+  <li class="lista-item"><span class="ajuda">Nenhum alerta nesta vista.</span></li>
   {% endfor %}
-  </tbody>
-</table></div>
+</ul>
 {% if paginas > 1 %}
 <p class="acoes">
   {% if pagina > 1 %}<a href="/alertas?{{ consulta_pag | urlencode ~ '&' if consulta_pag }}pagina={{ pagina - 1 }}">← Anteriores</a>{% endif %}

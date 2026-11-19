@@ -2,29 +2,26 @@
 {% block conteudo %}
 <h1>Olá, {{ cliente_atual.nome }}</h1>
 <p class="ajuda">Conta {{ conta.numero }}.</p>
-<table class="estreita">
-  <tr><th>Saldo</th><td class="num">{{ conta.saldo|mtc }}</td></tr>
-  <tr><th>Disponível</th><td class="num">{{ conta.disponivel|mtc }}</td></tr>
-  <tr><th>Em verificação</th><td class="num">{{ conta.saldo_retido|mtc }}</td></tr>
-</table>
+<div class="kpis">
+  <div class="kpi"><small>Saldo</small><strong>{{ conta.saldo|mtc }}</strong></div>
+  <div class="kpi kpi-normal"><small>Disponível</small><strong>{{ conta.disponivel|mtc }}</strong></div>
+  <div class="kpi kpi-atencao"><small>Em verificação</small><strong>{{ conta.saldo_retido|mtc }}</strong></div>
+</div>
 <p class="acoes"><a class="botao" href="/cliente/pagar">Pagar</a> <a class="botao" href="/cliente/transferir">Transferir</a></p>
 
 <h2 class="separado">Últimos movimentos</h2>
 {% if movimentos %}
-<div class="rolagem"><table>
-  <thead><tr><th>Data</th><th>Tipo</th><th>Estado</th><th>Descrição</th><th class="num">Valor</th><th></th></tr></thead>
-  <tbody>
-  {% for m in movimentos %}
-    <tr>
-      <td>{{ m.momento.strftime('%d/%m/%Y %H:%M') }}</td>
-      <td>{{ nomes_tipo_cliente.get(m.tipo, m.tipo) }}{% if m.contraparte_id and numeros.get(m.contraparte_id) %} <small>{{ 'de' if m.tipo == 'transferencia_recebida' else 'para' }} {{ numeros[m.contraparte_id] }}</small>{% endif %}</td>
-      <td>{{ estado_texto(m.tipo, m.estado, m.motivo) }}</td>
-      <td>{{ m.descricao or '' }}</td>
-      <td class="num">{{ m.valor|mtc }}</td>
-      <td><a href="/cliente/movimentos/{{ m.id }}">Ver</a></td>
-    </tr>
+<ul class="lista">
+  {% for m in movimentos %}{% set entrada = m.tipo in ('deposito', 'transferencia_recebida') %}
+  <li class="lista-item">
+    <span class="lista-icone {{ 'icone-normal' if entrada else ('icone-alto' if m.estado in ('recusado', 'cancelado') else ('icone-atencao' if m.estado == 'retido' else '')) }}" aria-hidden="true">{{ '↓' if entrada else '↑' }}</span>
+    <div class="lista-texto">
+      <b><a href="/cliente/movimentos/{{ m.id }}">{{ nomes_tipo_cliente.get(m.tipo, m.tipo) }}</a>{% if m.descricao %} · {{ m.descricao }}{% endif %}</b>
+      <small>{{ m.momento.strftime('%d/%m/%Y %H:%M') }}{% if m.contraparte_id and numeros.get(m.contraparte_id) %} · {{ 'de' if m.tipo == 'transferencia_recebida' else 'para' }} {{ numeros[m.contraparte_id] }}{% endif %} · {{ estado_texto(m.tipo, m.estado, m.motivo) }}</small>
+    </div>
+    <span class="lista-valor">{{ '+' if entrada else '−' }}{{ m.valor|mtc }}</span>
+  </li>
   {% endfor %}
-  </tbody>
-</table></div>
+</ul>
 {% else %}<p class="ajuda">Ainda sem movimentos.</p>{% endif %}
 {% endblock %}

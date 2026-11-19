@@ -8,7 +8,7 @@
   {% block cabeca %}{% endblock %}
 </head>
 <body>
-  <header>
+  <header class="faixa faixa-cliente">
     <div class="moldura">
       <p class="marca">Banco Demonstração</p>
       {% if cliente_atual %}
@@ -23,11 +23,13 @@
       {% endif %}
     </div>
   </header>
-  <main class="moldura">
+  <main class="moldura conteudo-sobreposto">
+  <div class="pagina">
     {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% for categoria, mensagem in mensagens %}<p class="aviso aviso-{{ categoria }}" role="{{ 'alert' if categoria == 'erro' else 'status' }}">{{ mensagem }}</p>{% endfor %}
     {% endwith %}
     {% block conteudo %}{% endblock %}
+  </div>
   </main>
 </body>
 </html>

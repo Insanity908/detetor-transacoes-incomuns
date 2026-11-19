@@ -107,3 +107,16 @@ def test_perfil_do_cliente():
 @pytest.mark.parametrize("cliente", [" C1", "C1 "])
 def test_perfil_aceita_espacos(cliente):
     assert perfil_cliente(pd.DataFrame(_cinco_normais()), cliente)["n_compras"] == 5
+
+
+def test_features_ignoram_transacoes_posteriores():
+    """Um pagamento com data simulada no passado não conta as compras que vieram depois (features causais)."""
+    import pandas as pd
+    from detector.perfis import calcular_features
+    linhas = [("T1", "2026-11-10 10:00"), ("T2", "2026-11-10 10:05"), ("T3", "2026-11-10 10:10"),
+              ("T0", "2026-11-10 09:58")]  # T0 é anterior às outras, embora venha no fim
+    df = pd.DataFrame([{"id_transacao": i, "cliente": "C1", "data_hora": pd.Timestamp(d), "valor": 100.0,
+                        "cidade": "MAPUTO", "pais": "MZ", "categoria": "MERCEARIA"} for i, d in linhas])
+    f = calcular_features(df)
+    assert f["compras_ultima_hora"].iloc[3] == 0 and f["compras_24h"].iloc[3] == 0
+    assert f["compras_ultima_hora"].iloc[2] == 3  # T3 vê T0, T1 e T2
