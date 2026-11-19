@@ -55,6 +55,7 @@ ACOES = {
     "saida_cliente": "Cliente saiu da área do cliente",
     "senha_cliente_alterada": "Cliente alterou a própria senha",
     "transferencia_cliente": "Cliente pediu uma transferência",
+    "pagamento_cliente": "Fez um pagamento na área do cliente",
 }
 POR_PAGINA = 50
 

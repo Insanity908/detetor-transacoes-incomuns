@@ -8,7 +8,9 @@
   {% if m.contraparte_id and numeros.get(m.contraparte_id) %}
   <tr><th>{{ 'De' if m.tipo == 'transferencia_recebida' else 'Para' }}</th><td>conta {{ numeros[m.contraparte_id] }}</td></tr>
   {% endif %}
-  {% if m.descricao %}<tr><th>Descrição</th><td>{{ m.descricao }}</td></tr>{% endif %}
+  {% if m.tipo == 'compra' and onde %}<tr><th>Pagamento</th><td>{{ onde.categoria|categoria|capitalize }}{% if m.descricao %} · {{ m.descricao }}{% endif %}</td></tr>
+  {% elif m.descricao %}<tr><th>Descrição</th><td>{{ m.descricao }}</td></tr>{% endif %}
+  {% if onde %}<tr><th>Local</th><td>{{ onde.local }}</td></tr>{% endif %}
   {% if m.saldo_apos is not none %}<tr><th>Saldo após</th><td class="num">{{ m.saldo_apos|mtc }}</td></tr>{% endif %}
 </table>
 {% if m.estado == 'retido' %}

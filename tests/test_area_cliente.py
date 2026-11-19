@@ -1,4 +1,6 @@
 """Tarefa 15: acesso do cliente (entrada, sessão e senha), separado do da equipa."""
+from datetime import datetime, timedelta
+
 import pytest
 from sqlalchemy import select
 
@@ -355,10 +357,11 @@ def test_modo_demonstracao_mostra_e_usa_a_partir_de(app, sessoes, cli, outro, ac
     _forcar_nivel(monkeypatch, "Normal", 5.0, visto)
     c = _sessao(app, cli)
     html = c.get("/cliente/transferir").get_data(as_text=True)
-    assert 'name="cidade"' in html and 'name="pais"' in html and "data-envio-unico" in html
-    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00",
-                                        "cidade": "TETE", "pais": "NG"})
-    assert (visto[0]["cidade"], visto[0]["pais"]) == ("TETE", "NG")
+    assert 'name="local"' in html and 'name="data"' in html and "data-envio-unico" in html
+    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00", "local": "EXT:NG"})
+    assert (visto[0]["cidade"], visto[0]["pais"]) == (cli.cidade, "NG")
+    c.post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10,00", "local": "MZ:TETE"})
+    assert (visto[1]["cidade"], visto[1]["pais"]) == ("TETE", "MZ")
 
 
 def test_sem_modo_demonstracao_campos_ausentes_e_ignorados(pasta_pequena, monkeypatch):
@@ -373,9 +376,9 @@ def test_sem_modo_demonstracao_campos_ausentes_e_ignorados(pasta_pequena, monkey
     _forcar_nivel(monkeypatch, "Normal", 5.0, visto)
     c = _sessao(app, a)
     html = c.get("/cliente/transferir").get_data(as_text=True)
-    assert 'name="cidade"' not in html and 'name="pais"' not in html
-    c.post("/cliente/transferir", data={"conta_destino": b.conta.numero, "valor": "10,00", "cidade": "TETE",
-                                        "pais": "NG"})
+    assert 'name="local"' not in html and 'name="data"' not in html
+    c.post("/cliente/transferir", data={"conta_destino": b.conta.numero, "valor": "10,00", "local": "EXT:NG",
+                                        "data": "2026-01-01", "hora": "03:00"})
     assert (visto[0]["cidade"], visto[0]["pais"]) == ("MAPUTO", "MZ")
 
 
@@ -449,3 +452,81 @@ def test_transferencia_redireciona_e_atualizar_nao_repete(app, sessoes, cli, out
     assert len(contas_bancarias.extrato(sessoes, cli.conta.id)) == antes
     assert _saldos(sessoes, cli, outro) == [(99_000, 0), (1_000, 0)]
     assert verificar_saldos(sessoes) == []
+
+
+# ---------------------------------------------------------------- pagamentos, local e data/hora simulada
+def _movimentos(sessoes):
+    from detector.banco import Movimento
+    with sessoes() as s:
+        return s.scalars(select(Movimento).order_by(Movimento.id)).all()
+
+
+def test_pagamento_normal_autorizado(app, sessoes, cli, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    c = _sessao(app, cli)
+    r = c.post("/cliente/pagar", data={"categoria": "ELETRONICA", "comerciante": "Loja X", "valor": "150,00"})
+    assert r.status_code == 303 and "/cliente/movimentos/" in r.headers["Location"]
+    html = c.get(r.headers["Location"]).get_data(as_text=True)
+    assert "Concluída" in html and "Loja X" in html
+    m = _movimentos(sessoes)[-1]
+    assert (m.tipo, m.estado, m.descricao) == ("compra", "autorizado", "Loja X")
+    assert _saldos(sessoes, cli) == [(85_000, 0)]
+    assert contas_bancarias.verificar_saldos(sessoes) == []
+
+
+def test_pagamento_suspeito_fica_retido_com_local_e_hora(app, sessoes, cli, acesso, monkeypatch):
+    _depositar(sessoes, cli, 1_000_000)
+    visto = []
+    _forcar_nivel(monkeypatch, "Alto risco", 80.0, visto)
+    ontem = datetime.now() - timedelta(days=1)
+    r = _sessao(app, cli).post("/cliente/pagar", data={
+        "categoria": "ELETRONICA", "comerciante": "Loja X", "valor": "8000", "local": "EXT:NG",
+        "data": f"{ontem:%Y-%m-%d}", "hora": "03:00"}, follow_redirects=True)
+    assert "Em verificação" in r.get_data(as_text=True)
+    assert (visto[0]["pais"], visto[0]["categoria"]) == ("NG", "ELETRONICA")
+    m = _movimentos(sessoes)[-1]
+    assert m.estado == "retido" and m.momento == ontem.replace(hour=3, minute=0, second=0, microsecond=0)
+
+
+def test_pagamento_sem_saldo_e_conta_bloqueada(app, sessoes, cli, acesso, monkeypatch):
+    _depositar(sessoes, cli, 1_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    c = _sessao(app, cli)
+    dados = {"categoria": "MERCEARIA", "comerciante": "Mercado", "valor": "50,00"}
+    assert "Recusada — Saldo insuficiente." in c.post("/cliente/pagar", data=dados, follow_redirects=True).get_data(as_text=True)
+    contas_bancarias.bloquear(sessoes, cli.conta.id, True, "teste")
+    dados["valor"] = "5,00"
+    html = c.post("/cliente/pagar", data=dados, follow_redirects=True).get_data(as_text=True)
+    assert "A sua conta está bloqueada" in html  # a sessão termina: o pagamento nem chega a ser pedido
+    assert _saldos(sessoes, cli) == [(1_000, 0)]
+
+
+@pytest.mark.parametrize("dados,erro", [
+    ({"categoria": "BRINQUEDOS", "comerciante": "X", "valor": "10"}, "Escolha a categoria"),
+    ({"categoria": "MERCEARIA", "comerciante": "", "valor": "10"}, "Indique o comerciante"),
+    ({"categoria": "MERCEARIA", "comerciante": "x" * 141, "valor": "10"}, "Indique o comerciante"),
+    ({"categoria": "MERCEARIA", "comerciante": "X", "valor": "10", "local": "EXT:US"}, "Escolha um local da lista."),
+    ({"categoria": "MERCEARIA", "comerciante": "X", "valor": "10", "local": "MZ:LISBOA"}, "Escolha um local da lista."),
+    ({"categoria": "MERCEARIA", "comerciante": "X", "valor": "10", "data": "2099-01-01"}, "não pode ser futura"),
+    ({"categoria": "MERCEARIA", "comerciante": "X", "valor": "10", "data": "2020-01-01"}, "30 dias"),
+    ({"categoria": "MERCEARIA", "comerciante": "X", "valor": "10", "data": "31/12/2026"}, "inválida"),
+])
+def test_pagamento_dados_invalidos_400(app, sessoes, cli, acesso, monkeypatch, dados, erro):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    r = _sessao(app, cli).post("/cliente/pagar", data=dados)
+    assert r.status_code == 400 and erro in r.get_data(as_text=True)
+
+
+def test_transferencia_local_invalido_400(app, sessoes, cli, outro, acesso, monkeypatch):
+    _depositar(sessoes, cli, 100_000)
+    _forcar_nivel(monkeypatch, "Normal", 5.0)
+    r = _sessao(app, cli).post("/cliente/transferir", data={"conta_destino": outro.conta.numero, "valor": "10",
+                                                            "local": "EXT:US"})
+    assert r.status_code == 400 and "Escolha um local da lista." in r.get_data(as_text=True)
+
+
+def test_inicio_tem_botoes_pagar_e_transferir(app, cli, acesso):
+    html = _sessao(app, cli).get("/cliente/").get_data(as_text=True)
+    assert 'href="/cliente/pagar"' in html and 'href="/cliente/transferir"' in html

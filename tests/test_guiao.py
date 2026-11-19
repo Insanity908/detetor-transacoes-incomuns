@@ -58,10 +58,10 @@ def test_guiao_de_ponta_a_ponta(pasta_pequena, monkeypatch):
     assert "19.774,50 MT" in inicio
 
     # Passo 4: "a partir de" Tete, transfere quase todo o saldo: fica em verificação.
-    assert 'name="cidade"' in c.get("/cliente/transferir").get_data(as_text=True)
+    assert 'name="local"' in c.get("/cliente/transferir").get_data(as_text=True)
     _forcar_nivel(monkeypatch, "Alto risco", 92.0)
     r = c.post("/cliente/transferir", data={"conta_destino": destino.conta.numero, "valor": "19700,00",
-                                            "cidade": "TETE", "pais": "MZ"}, follow_redirects=True)
+                                            "local": "MZ:TETE"}, follow_redirects=True)
     assert "Em verificação" in r.get_data(as_text=True)
     with sessoes() as s:
         conta = s.get(ContaBancaria, cli.conta.id)

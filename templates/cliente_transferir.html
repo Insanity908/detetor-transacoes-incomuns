@@ -13,23 +13,7 @@
   <label>Conta de destino <input name="conta_destino" required maxlength="20" autocomplete="off" inputmode="numeric" value="{{ valores.get('conta_destino', '') if not resultado else '' }}"></label>
   <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="500,00" value="{{ valores.get('valor', '') if not resultado else '' }}"></label>
   <label>Descrição (opcional) <input name="descricao" maxlength="140" autocomplete="off" value="{{ valores.get('descricao', '') if not resultado else '' }}"></label>
-  {% if demonstracao %}
-  {% set cidade_sel = valores.get('cidade') or cliente_atual.cidade %}
-  {% set pais_sel = valores.get('pais') or 'MZ' %}
-  <fieldset>
-    <legend>A partir de (modo demonstração)</legend>
-    <label>Cidade
-      <select name="cidade">
-        {% for x in cidades %}<option value="{{ x }}" {% if cidade_sel == x %}selected{% endif %}>{{ x|capitalize }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>País
-      <select name="pais">
-        {% for p in paises %}<option value="{{ p }}" {% if pais_sel == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
-      </select>
-    </label>
-  </fieldset>
-  {% endif %}
+  {% include '_cliente_simular.html' %}
   <button type="submit" class="principal">Transferir</button>
 </form>
 <p><a href="/cliente/">Voltar ao início</a></p>

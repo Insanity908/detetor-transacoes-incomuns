@@ -7,7 +7,7 @@
   <tr><th>Disponível</th><td class="num">{{ conta.disponivel|mtc }}</td></tr>
   <tr><th>Em verificação</th><td class="num">{{ conta.saldo_retido|mtc }}</td></tr>
 </table>
-<p><a href="/cliente/transferir">Fazer uma transferência</a></p>
+<p class="acoes"><a class="botao" href="/cliente/pagar">Pagar</a> <a class="botao" href="/cliente/transferir">Transferir</a></p>
 
 <h2 class="separado">Últimos movimentos</h2>
 {% if movimentos %}

@@ -1,0 +1,26 @@
+{% extends "base_cliente.html" %}
+{% block conteudo %}
+<h1>Pagar</h1>
+<p class="ajuda">Conta {{ conta.numero }} · disponível {{ conta.disponivel|mtc }}.</p>
+{% if resultado %}
+<p class="aviso aviso-{{ 'sucesso' if resultado.estado == 'autorizado' else ('retido' if resultado.estado == 'retido' else 'erro') }}" role="status">
+  {{ resultado.texto }}{% if resultado.movimento_id %} <a href="/cliente/movimentos/{{ resultado.movimento_id }}">Ver movimento</a>{% endif %}
+</p>
+{% endif %}
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+<form method="post" action="/cliente/pagar" class="pilha" data-envio-unico>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Categoria
+    <select name="categoria" required>
+      <option value="">— escolha —</option>
+      {% for x in categorias %}<option value="{{ x }}" {% if valores.get('categoria') == x and not resultado %}selected{% endif %}>{{ x|categoria|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Comerciante <input name="comerciante" required maxlength="140" autocomplete="off" value="{{ valores.get('comerciante', '') if not resultado else '' }}"></label>
+  <label>Valor (MT) <input name="valor" required inputmode="decimal" autocomplete="off" placeholder="500,00" value="{{ valores.get('valor', '') if not resultado else '' }}"></label>
+  {% include '_cliente_simular.html' %}
+  <button type="submit" class="principal">Pagar</button>
+</form>
+<p><a href="/cliente/">Voltar ao início</a></p>
+<script src="{{ url_for('static', filename='envio_unico.js') }}"></script>
+{% endblock %}

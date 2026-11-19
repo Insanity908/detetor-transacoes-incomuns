@@ -1,0 +1,19 @@
+{# Local, data e hora simulados (só no modo demonstração). #}
+{% if demonstracao %}
+{% set local_sel = valores.get('local') or ('MZ:' ~ cliente_atual.cidade) %}
+<fieldset class="simular">
+  <legend>Simular (modo demonstração)</legend>
+  <label>Local
+    <select name="local">
+      {% for grupo, opcoes in locais %}
+      <optgroup label="{{ grupo }}">
+        {% for valor, nome in opcoes %}<option value="{{ valor }}" {% if local_sel == valor %}selected{% endif %}>{{ nome }}</option>{% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Data <input type="date" name="data" value="{{ valores.get('data', '') }}"></label>
+  <label>Hora <input type="time" name="hora" value="{{ valores.get('hora', '') }}"></label>
+  <p class="ajuda">Vazio = agora. A data pode ir até 30 dias para trás.</p>
+</fieldset>
+{% endif %}
