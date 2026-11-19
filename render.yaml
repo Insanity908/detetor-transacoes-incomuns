@@ -31,3 +31,10 @@ services:
       # Defina a senha do administrador no painel do Render (não fica no repositório).
       - key: ADMIN_SENHA
         sync: false
+      # A cada arranque, deixa a demonstração pronta: utilizadores analista, supervisor e balcao e um
+      # "Cliente Demonstração" com 20 000 MT e acesso à área do cliente (/cliente/entrar).
+      - key: DEMO_DADOS
+        value: "1"
+      # Senha desses utilizadores e do cliente (sem troca obrigatória). Se ficar vazia, usa a ADMIN_SENHA.
+      - key: DEMO_SENHA
+        sync: false

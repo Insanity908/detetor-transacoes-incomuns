@@ -142,8 +142,9 @@ def instalar(app: Flask, sessoes: sessionmaker) -> None:
         except ValueError as exc:
             return _ficha(c, str(exc), 400)
         auditar("acesso_cliente_criado" if novo else "senha_cliente_redefinida", alvo=c.codigo)
-        flash("Acesso criado. O cliente muda a senha ao entrar." if novo
-              else "Senha redefinida. O cliente muda-a ao entrar e as sessões abertas terminaram.", "sucesso")
+        entrada = f"O cliente entra em /cliente/entrar com o código {c.codigo}"
+        flash(f"Acesso criado. {entrada} e muda a senha na primeira entrada." if novo
+              else f"Senha redefinida. {entrada} e muda-a ao entrar; as sessões abertas terminaram.", "sucesso")
         return redirect(url_for("balcao_cliente", cliente_id=c.id))
 
     @app.post("/balcao/clientes/<int:cliente_id>/bloquear")

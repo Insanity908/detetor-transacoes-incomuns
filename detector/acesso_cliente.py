@@ -38,8 +38,8 @@ def _agora() -> datetime:
     return datetime.now().replace(microsecond=0)
 
 
-def criar_ou_redefinir(sessoes: sessionmaker, cliente_id: int, senha: str) -> bool:
-    """Cria o acesso ou redefine a senha (obriga a mudá-la ao entrar e termina as sessões abertas).
+def criar_ou_redefinir(sessoes: sessionmaker, cliente_id: int, senha: str, trocar_senha: bool = True) -> bool:
+    """Cria o acesso ou redefine a senha (por omissão obriga a mudá-la ao entrar) e termina as sessões abertas.
     Devolve True se o acesso foi criado agora."""
     validar_senha(senha)
     with sessoes.begin() as sessao:
@@ -50,7 +50,7 @@ def criar_ou_redefinir(sessoes: sessionmaker, cliente_id: int, senha: str) -> bo
         if novo:
             a = AcessoCliente(cliente_id=cliente_id, versao_sessao=0)
             sessao.add(a)
-        a.senha_hash, a.trocar_senha = generate_password_hash(senha), True
+        a.senha_hash, a.trocar_senha = generate_password_hash(senha), trocar_senha
         a.tentativas_falhadas, a.bloqueado_ate = 0, None
         a.versao_sessao = (a.versao_sessao or 0) + 1
     return novo

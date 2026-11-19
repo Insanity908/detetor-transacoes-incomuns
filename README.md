@@ -32,6 +32,10 @@ No plano gratuito não há disco persistente: os dados (clientes novos, moviment
 serviço reinicia ou adormece (após cerca de 15 minutos sem visitas). Serve para demonstrar; para guardar dados,
 use um plano com disco e aponte `URL_BANCO` para ele.
 
+Com `DEMO_DADOS=1` (já no `render.yaml`), cada arranque também cria os utilizadores `analista`, `supervisor` e
+`balcao` e o **Cliente Demonstração** (20.000 MT, acesso em `/cliente/entrar`), todos com a senha `DEMO_SENHA`
+(ou a `ADMIN_SENHA`, se a `DEMO_SENHA` ficar vazia). Assim a demonstração fica pronta depois de qualquer reinício.
+
 ## O que faz
 
 | Área | Resumo |

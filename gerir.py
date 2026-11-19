@@ -107,15 +107,55 @@ def nuvem() -> None:
     banco()
     treinar()
     criar_sinteticos()
+    senha = os.environ.get("ADMIN_SENHA", "")
     if contas.contar(_sessoes()) > 0:
         print("Já existem contas: nenhum administrador criado.")
-        return
-    senha = os.environ.get("ADMIN_SENHA", "")
-    if not senha:
+    elif not senha:
         print("Nenhuma conta criada: defina ADMIN_SENHA (e, se quiser, ADMIN_UTILIZADOR) no painel do alojamento.")
-        return
-    criar_admin(os.environ.get("ADMIN_UTILIZADOR", "").strip() or "admin",
-                os.environ.get("ADMIN_NOME", "").strip() or "Administrador", senha)
+    else:
+        criar_admin(os.environ.get("ADMIN_UTILIZADOR", "").strip() or "admin",
+                    os.environ.get("ADMIN_NOME", "").strip() or "Administrador", senha)
+    if os.environ.get("DEMO_DADOS", "").strip().lower() in ("1", "true", "sim", "s", "yes", "on"):
+        senha_demo = os.environ.get("DEMO_SENHA", "") or senha
+        if senha_demo:
+            dados_demo(senha_demo)
+        else:
+            print("Dados de demonstração não criados: defina DEMO_SENHA ou ADMIN_SENHA.")
+
+
+EQUIPA_DEMO = (("analista", "Analista de Demonstração"), ("supervisor", "Supervisor de Demonstração"),
+               ("balcao", "Balcão de Demonstração"))
+NUIT_CLIENTE_DEMO = "100000001"
+DEPOSITO_DEMO = 2_000_000  # 20 000,00 MT
+
+
+def dados_demo(senha: str) -> None:
+    """Deixa a demonstração pronta: um utilizador por perfil e um cliente com conta, saldo e acesso.
+
+    Tudo com a mesma senha e sem obrigar a trocá-la. Idempotente: o que já existe não é repetido.
+    """
+    from datetime import date
+
+    from detector import acesso_cliente, auditoria, clientes, contas, contas_bancarias
+    sessoes = _sessoes()
+    for perfil, nome in EQUIPA_DEMO:
+        if contas.obter_por_nome(sessoes, perfil) is None:
+            contas.criar(sessoes, perfil, nome, perfil, senha)
+            auditoria.registar(sessoes, "utilizador_criado", nome_utilizador="gerir.py", alvo=perfil,
+                               detalhe=f"perfil {perfil} (demonstração)")
+            print(f"Utilizador de demonstração '{perfil}' criado.")
+    existente = [c for c in clientes.pesquisar(sessoes, NUIT_CLIENTE_DEMO) if not c.sintetico]
+    if existente:
+        cliente = existente[0]
+    else:
+        cliente = clientes.criar(sessoes, clientes.DadosCliente(
+            nome="Cliente Demonstração", data_nascimento=date(1990, 1, 1), tipo_documento="NUIT",
+            numero_documento=NUIT_CLIENTE_DEMO, telefone="841234567", email="", cidade="MAPUTO",
+            morada="Av. 25 de Setembro, Maputo"), por="gerir.py")
+        contas_bancarias.depositar(sessoes, cliente.conta.id, DEPOSITO_DEMO, "balcao", "gerir.py",
+                                   descricao="Depósito inicial da demonstração")
+        acesso_cliente.criar_ou_redefinir(sessoes, cliente.id, senha, trocar_senha=False)
+    print(f"Cliente de demonstração: código {cliente.codigo} (entra em /cliente/entrar).")
 
 
 def criar_admin_interativo() -> None:

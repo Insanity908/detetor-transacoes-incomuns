@@ -17,12 +17,18 @@ Todos os valores são em metical e aparecem como `1.234,50 MT`.
   mesmo que as duas áreas tenham sessões separadas no mesmo navegador.
 - Depois de atualizar de uma versão antiga, treine os modelos de novo: `gerir.py treinar --forcar`.
 
+**Na versão online (Render, plano gratuito)**, cada arranque deixa a demonstração pronta: além do `admin`, existem
+os utilizadores `analista`, `supervisor` e `balcao` e o **Cliente Demonstração** (com 20.000,00 MT e acesso já
+criado), todos com a senha `DEMO_SENHA` definida no Render (ou a do `admin`, se essa estiver vazia). O código do
+cliente aparece no balcão (normalmente `C0301`). Para uma apresentação curta pode saltar os passos 1 e 2 e entrar
+logo como esse cliente; os clientes novos que criar perdem-se quando o serviço reinicia.
+
 ## Os seis passos
 
 ### 1. O balcão cria o cliente e deposita 20.000 MT
 Em **Clientes → Novo cliente**, preencha o nome, a data de nascimento, o documento (por exemplo, NUIT de 9
 dígitos), o telefone, a cidade (**Maputo**) e a morada. Ao gravar, o sistema abre a ficha com o código do cliente
-(com os 300 sintéticos, `C0301`) e o número da conta.
+(com os 300 sintéticos, `C0301`; `C0302` se o Cliente Demonstração já existir) e o número da conta.
 
 Na ficha, em **Depósito**, escreva `20000` e grave.
 
@@ -32,7 +38,8 @@ nenhuma página de alertas.
 ### 2. O balcão cria o acesso do cliente
 Na mesma ficha, em **Acesso do cliente**, escreva uma senha temporária e clique **Criar acesso**.
 
-**O que se vê:** "Acesso criado. O cliente muda a senha ao entrar."
+**O que se vê:** "Acesso criado. O cliente entra em /cliente/entrar com o código C0301 e muda a senha na primeira
+entrada." A página de entrada da equipa também tem um link **Área do cliente**.
 
 ### 3. O cliente entra, muda a senha e faz duas transferências pequenas
 Na outra janela, abra <http://127.0.0.1:5000/cliente/entrar> e entre com o código do cliente e a senha temporária.
